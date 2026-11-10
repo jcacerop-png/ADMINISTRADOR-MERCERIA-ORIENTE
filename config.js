@@ -6,8 +6,8 @@
    ========================================================= */
 const CONFIG = {
   NOMBRE: "Mercería de Oriente",
-  SUPABASE_URL: "PEGA_AQUI_TU_PROJECT_URL",
-  SUPABASE_ANON_KEY: "PEGA_AQUI_TU_ANON_KEY",
+  SUPABASE_URL: "https://rilvpaopsnstcemtshlo.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_fXx2vCYlVFxbJVNWf34Iaw_2b4vykRY",
   WHATSAPP: "584248901496",
 };
 
