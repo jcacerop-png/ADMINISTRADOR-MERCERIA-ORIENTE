@@ -1,0 +1,28 @@
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 2)
+
+Archivos de esta carpeta:
+  Administracion.html    Panel (Inicio, Venta rápida, Catálogo, Carrusel, Analítica, Notas)
+  admin.js               Lógica general del panel (login, catálogo, plantillas, notas)
+  venta.js               Venta rápida
+  analitica.js           Analítica y Excel del periodo
+  carrusel.js            Fotos del carrusel (entrada y banner)
+  comun.js, config.js    Compartidos (config.js lleva tus datos de Supabase)
+  styles.css             Diseño (negro y amarillo, tema claro y oscuro)
+  logo.png               Logo
+  supabase-merceria.sql     Base de datos inicial (ya ejecutada: NO volver a correrla)
+  supabase-merceria-v2.sql  Actualización 2: carrusel, ventas y anulaciones (ejecutar UNA vez)
+
+Pasos para esta actualización:
+1. Supabase → SQL Editor → pega TODO supabase-merceria-v2.sql → Run.
+2. Sube todos los archivos de esta carpeta al mismo sitio que el catálogo.
+   Cambia Administracion.html, admin.js, comun.js, styles.css y agrega venta.js, analitica.js y carrusel.js.
+
+Notas:
+- Venta rápida descuenta las existencias en la base de datos. Si una prenda se queda sin piezas,
+  la venta se rechaza con un aviso claro.
+- Anular una venta devuelve las existencias y la marca como anulada (no se borra).
+- El Excel del periodo incluye Resumen, Por producto (con totales) y Detalle de ventas.
+  Las ventas anuladas no se suman, pero se cuentan en el Resumen.
+- Ganancia y costo solo se ven en el panel, nunca en el catálogo público.
+
+Nunca pongas la clave "service_role" en ningún archivo.
