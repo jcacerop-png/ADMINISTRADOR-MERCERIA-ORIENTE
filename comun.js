@@ -73,14 +73,58 @@ function comprimir(file, max = 1000) {
   });
 }
 
+/* ---------- Visor de foto grande: tocar la foto para acercarla ---------- */
+function crearVisor() {
+  const v = document.createElement("div");
+  v.id = "visor";
+  v.className = "visor";
+  v.hidden = true;
+  v.innerHTML = `
+    <button class="visor-x" type="button" aria-label="Cerrar foto">✕</button>
+    <div class="visor-marco"><img alt=""></div>
+    <p class="visor-ayuda">Toca la foto para acercarla · Esc para cerrar</p>`;
+  document.body.appendChild(v);
+  v.addEventListener("click", e => {
+    if (e.target.closest(".visor-x")) return cerrarZoom();
+    if (e.target.tagName === "IMG") return v.classList.toggle("cerca");
+    if (!v.classList.contains("cerca")) cerrarZoom();
+  });
+  return v;
+}
+
+function abrirZoom(src, texto = "") {
+  const v = $("#visor") || crearVisor();
+  const img = $("img", v);
+  img.src = src;
+  img.alt = texto;
+  v.classList.remove("cerca");
+  v.hidden = false;
+  document.body.classList.add("lock");
+}
+
+function cerrarZoom() {
+  const v = $("#visor");
+  if (!v || v.hidden) return;
+  v.hidden = true;
+  v.classList.remove("cerca");
+  $("img", v).removeAttribute("src");
+  const modal = $("#modal");
+  if (!modal || modal.hidden) document.body.classList.remove("lock");
+}
+
 /* ---------- Eventos comunes ---------- */
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-tema]")) return alternarTema();
+  const zoom = e.target.closest("[data-zoom]");
+  if (zoom) return abrirZoom(zoom.dataset.zoom, zoom.getAttribute("alt") || "");
   if (e.target.closest("[data-cerrar]") || e.target.id === "modal") return cerrarModal();
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#modal").hidden) cerrarModal();
+  if (e.key !== "Escape") return;
+  const v = $("#visor");
+  if (v && !v.hidden) return cerrarZoom();
+  if (!$("#modal").hidden) cerrarModal();
 });
 
 aplicarTema(localStorage.getItem("mo_tema") === "claro" ? "claro" : "oscuro");
