@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es" data-theme="oscuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0D0D">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Mercería de Oriente · Administración</title>
+  <link rel="icon" href="logo.png">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; base-uri 'self'; object-src 'none'">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ================= LOGIN ================= -->
+  <section id="login" class="login" hidden>
+    <form id="loginForm" class="card login-card">
+      <img class="logo-login" src="logo.png" alt="Logo de Mercería de Oriente">
+      <h1>Mercería de Oriente</h1>
+      <p class="muted small" style="text-align:center">Panel de administración</p>
+
+      <label>Cuenta
+        <select id="selCuenta" name="cuenta">
+          <option value="rodolfo019@merceria.com">Rodolfo</option>
+          <option value="administrador029@merceria.com">Administrador</option>
+        </select>
+      </label>
+      <p class="rol" id="rolCuenta">Dueño</p>
+
+      <label>Contraseña
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p class="error" id="loginError" hidden>Contraseña incorrecta.</p>
+      <button class="btn" type="submit" id="btnEntrar">Entrar</button>
+    </form>
+  </section>
+
+  <!-- ================= PANEL ================= -->
+  <div id="app" hidden>
+    <header class="top">
+      <div class="wrap bar">
+        <div class="brand">
+          <img class="logo" src="logo.png" alt="">
+          <span class="marca">Mercería<br><small>de Oriente · Gestión</small></span>
+        </div>
+        <nav class="tabs">
+          <button data-tab="inicio" class="on">Inicio</button>
+          <button data-tab="catalogo">Catálogo</button>
+          <button data-tab="notas">Notas</button>
+        </nav>
+        <div class="acciones">
+          <span class="quien" id="quien"></span>
+          <button class="btn ghost sm" data-tema aria-label="Cambiar tema">🌙 Tema oscuro</button>
+          <button class="btn ghost sm" data-action="salir">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap" style="padding-top:22px;padding-bottom:60px">
+
+      <!-- INICIO -->
+      <section data-view="inicio">
+        <span class="eyebrow">Resumen</span>
+        <h1 id="saludo"></h1>
+        <div class="kpis" id="kpis"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Poca existencia</h3>
+            <ul class="lista" id="bajos" style="margin-top:10px"></ul>
+          </div>
+          <div class="card">
+            <h3>Actividad reciente</h3>
+            <ul class="lista" id="feed" style="margin-top:10px"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- CATÁLOGO -->
+      <section data-view="catalogo" hidden>
+        <div class="toolbar">
+          <input id="buscarAdm" class="input" placeholder="Buscar producto…" autocomplete="off">
+          <button class="btn ghost sm" data-action="plantillas">Editar plantillas</button>
+          <button class="btn" data-action="nuevo">+ Nuevo producto</button>
+        </div>
+        <div class="chips" id="chipsAdm"></div>
+        <div class="grid-adm" id="gridAdm"></div>
+      </section>
+
+      <!-- NOTAS -->
+      <section data-view="notas" hidden>
+        <div class="card">
+          <h3>Notas y recordatorios</h3>
+          <p class="hint" style="margin:4px 0 12px">Pendientes. Marca lo que ya hiciste.</p>
+          <form id="formNota" class="form-nota">
+            <input name="texto" required maxlength="300" placeholder="Escribe un pendiente…" autocomplete="off" aria-label="Nueva nota">
+            <button class="btn sm" type="submit">Agregar</button>
+          </form>
+          <ul class="lista" id="listaNotas" style="margin-top:12px"></ul>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="modal" class="modal" hidden><div class="sheet" role="dialog" aria-modal="true"></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="config.js"></script>
+  <script src="comun.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

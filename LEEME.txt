@@ -1,0 +1,21 @@
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN
+
+Archivos de esta carpeta:
+  Administracion.html   Panel (se abre desde el enlace de la página)
+  admin.js              Lógica del panel
+  comun.js, config.js   Compartidos (config.js lleva tus datos de Supabase)
+  styles.css            Diseño (negro y amarillo, tema claro y oscuro)
+  logo.png              Logo
+  supabase-merceria.sql Base de datos (ejecutar UNA sola vez en Supabase)
+
+Pasos:
+1. Crea un proyecto nuevo en Supabase.
+2. SQL Editor → pega todo supabase-merceria.sql → Run.
+3. Authentication → Users → Add user (Auto Confirm User):
+   rodolfo019@merceria.com y administrador029@merceria.com, con su contraseña.
+4. Authentication → Providers → Email: desactiva "Allow new users to sign up".
+5. Settings → API: copia Project URL y la clave "anon public" dentro de config.js
+   (en esta carpeta Y en la carpeta del catálogo).
+6. Sube todos los archivos a la misma carpeta (GitHub o Netlify).
+
+Nunca pongas la clave "service_role" en ningún archivo.
