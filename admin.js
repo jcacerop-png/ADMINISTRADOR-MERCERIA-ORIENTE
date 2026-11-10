@@ -19,7 +19,8 @@ const adm = {
   chip: "todos",
   q: "",
   form: null,          // producto abierto en el formulario
-  plantilla: "maquina" // tipo que se edita en "Editar plantillas"
+  plantilla: "maquina", // tipo que se edita en "Editar plantillas"
+  tab: "inicio"         // pestaña abierta (para refrescar solo lo que se ve)
 };
 
 const stockDe = p => (Array.isArray(p.variantes) ? p.variantes : []).reduce((a, v) => a + (Number(v.stock) || 0), 0);
@@ -123,15 +124,25 @@ async function cargar() {
     pintarInicio();
     pintarCatalogo();
     pintarNotas();
+    alEntrarTab(adm.tab);
   } catch (err) {
     toast("No se pudieron cargar los datos: " + (err.message || "error"));
   }
 }
 
+// Cada pestaña nueva se refresca solo cuando se abre (o cuando llegan cambios en vivo)
+function alEntrarTab(tab) {
+  if (tab === "venta" && typeof refrescarVenta === "function") refrescarVenta();
+  if (tab === "analitica" && typeof refrescarAnalitica === "function") refrescarAnalitica();
+  if (tab === "carrusel" && typeof refrescarCarrusel === "function") refrescarCarrusel();
+}
+
 function irA(tab) {
+  adm.tab = tab;
   $$("[data-view]").forEach(v => (v.hidden = v.dataset.view !== tab));
   $$("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   window.scrollTo(0, 0);
+  alEntrarTab(tab);
 }
 
 function pintarInicio() {
@@ -168,7 +179,7 @@ function tarjetaAdm(p) {
   const foto = fotoDe(p);
   return `
   <article class="card prod-adm ${p.activo ? "" : "oculto"}">
-    <div class="foto">${foto ? `<img src="${esc(foto)}" alt="${esc(p.nombre)}">` : `<span class="sin-foto">Sin foto</span>`}</div>
+    <div class="foto">${foto ? `<img src="${esc(foto)}" data-zoom="${esc(foto)}" alt="${esc(p.nombre)}">` : `<span class="sin-foto">Sin foto</span>`}</div>
     <div class="cuerpo">
       <span class="tipo">${esc(TIPOS[p.tipo] || "")}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
       <h3>${esc(p.nombre)}</h3>
@@ -275,7 +286,7 @@ function dibujarFormulario() {
       <div class="fotos-pf">
         ${f.fotos.map((u, i) => `
           <div class="foto-pf">
-            <img src="${esc(u)}" alt="Foto ${i + 1}">
+            <img src="${esc(u)}" data-zoom="${esc(u)}" alt="Foto ${i + 1}">
             <div class="acc-foto">
               ${i === 0
                 ? `<span class="pill ok">Principal</span>`
