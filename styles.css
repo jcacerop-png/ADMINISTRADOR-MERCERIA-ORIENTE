@@ -134,9 +134,11 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
 }
 .visor.cerca img { max-width: none; max-height: none; width: 220vmin; cursor: zoom-out; }
 .visor-x {
-  position: absolute; top: 14px; right: 14px; z-index: 2; width: 44px; height: 44px; border-radius: 50%;
-  border: 1.5px solid #FACC15; background: rgba(0, 0, 0, .6); color: #FACC15; font: inherit; font-size: 18px; cursor: pointer;
+  position: absolute; top: 14px; right: 14px; z-index: 2; width: 52px; height: 52px; border-radius: 50%;
+  border: 2px solid #0D0D0D; background: #FACC15; color: #0D0D0D; font: inherit; font-size: 24px; font-weight: 800; line-height: 1;
+  cursor: pointer; box-shadow: 0 0 0 3px #FACC15, 0 12px 28px rgba(0, 0, 0, .6);
 }
+.visor-x:hover { background: #FFF176; }
 .visor-ayuda { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #DDDDDD; font-size: 13px; pointer-events: none; }
 
 /* ---------- Notificaciones ---------- */
@@ -162,6 +164,13 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
   border-radius: 999px; cursor: pointer; white-space: nowrap;
 }
 .tabs button.on { background: var(--acc); color: #0D0D0D; }
+
+/* Barra inferior con iconos: se activa solo en el celular (ver bloque de móvil) */
+.tabbar { display: none; }
+.tabbar svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; flex: none;
+}
 
 /* ---------- Entrada (pantalla completa con fotos de fondo) ---------- */
 .entrada {
@@ -198,33 +207,17 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
 .tema-flotante { position: absolute; top: 18px; right: 18px; z-index: 3; color: #FFFFFF; border-color: #FFFFFF; }
 .tema-flotante:hover { color: #0D0D0D; }
 
-/* ---------- Banner de fotos (arriba del catálogo) ---------- */
-.banner {
-  position: relative; margin: 22px auto 0; max-width: 1180px; aspect-ratio: 21 / 8; border-radius: 24px;
-  overflow: hidden; background: #0D0D0D; box-shadow: var(--sombra); touch-action: pan-y;
-}
-.banner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1s ease; }
-.banner img.on { opacity: 1; }
-.banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, .45)); pointer-events: none; }
-.banner-contador {
-  position: absolute; left: 18px; top: 14px; z-index: 2; font-size: 12px; font-weight: 700; letter-spacing: .2em;
-  color: #FACC15; background: rgba(0, 0, 0, .55); padding: 4px 12px; border-radius: 999px;
-}
-.banner-flecha {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 44px; height: 44px; border-radius: 50%;
-  border: 1.5px solid #FACC15; background: rgba(0, 0, 0, .55); color: #FACC15; font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
-  display: grid; place-items: center; transition: background .2s, color .2s;
-}
-.banner-flecha:hover { background: #FACC15; color: #0D0D0D; }
-.banner-flecha.prev { left: 14px; }
-.banner-flecha.next { right: 14px; }
-.banner-puntos { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 2; }
-.banner-puntos button { width: 8px; height: 8px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, .5); padding: 0; cursor: pointer; transition: width .3s, background .3s; }
-.banner-puntos button.on { width: 28px; background: #FACC15; }
-
 /* ---------- Página pública ---------- */
-.hero { padding: 34px 0 18px; }
-.hero h1 { font-size: clamp(28px, 4vw, 44px); }
+.hero { padding: 30px 0 10px; max-width: 760px; }
+.hero h1 { font-size: clamp(30px, 4.6vw, 50px); }
+.hero-lead { margin-top: 10px; font-size: 16px; color: var(--muted); max-width: 56ch; }
+.hero-datos { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-datos li {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
+  padding: 7px 13px; border: 1.5px solid var(--line); border-radius: 999px;
+}
+.hero-datos b { color: var(--ink); font-weight: 800; }
+.panel-main { padding-top: 22px; padding-bottom: 60px; }
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 6px; }
 .toolbar .input { flex: 1; min-width: 200px; }
 .toolbar select { width: auto; border-radius: 999px; }
@@ -240,7 +233,7 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
 .card-prod:focus-visible { outline: 3px solid var(--acc); outline-offset: 3px; }
 .card-prod .foto img { transition: transform .7s cubic-bezier(.2, .8, .2, 1); }
 .card-prod:hover .foto img { transform: scale(1.08); }
-.foto { aspect-ratio: 1 / 1; background: var(--foto); display: grid; place-items: center; overflow: hidden; }
+.foto { position: relative; aspect-ratio: 1 / 1; background: var(--foto); display: grid; place-items: center; overflow: hidden; }
 .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sin-foto { color: var(--muted); font-size: 13px; font-weight: 600; }
 .cuerpo { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
@@ -388,6 +381,105 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
 .car-item.off img { filter: grayscale(1); opacity: .5; }
 .car-acc { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px; justify-content: center; }
 
+/* ---------- Cabecera de sección y categorías con foto ---------- */
+.categorias { margin-top: 26px; }
+.cabecera-seccion { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.cabecera-seccion h2 { font-size: 24px; margin: 0; }
+.cat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cat {
+  display: flex; flex-direction: column; padding: 0; text-align: left; font: inherit; color: var(--ink);
+  background: var(--card); border: 1.5px solid var(--line); border-radius: 18px; overflow: hidden; cursor: pointer;
+  box-shadow: var(--sombra); transition: transform .35s cubic-bezier(.2, .8, .2, 1), border-color .25s, box-shadow .35s;
+}
+.cat:hover { transform: translateY(-4px); box-shadow: var(--sombra-alta); }
+.cat.on { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc); }
+.cat-foto { display: block; aspect-ratio: 4 / 3; background: var(--foto); overflow: hidden; }
+.cat-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cat-txt { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; }
+.cat-txt b { font-family: "Playfair Display", Georgia, serif; font-size: 16px; }
+.cat-txt small { color: var(--muted); font-size: 12.5px; }
+@media (min-width: 760px) {
+  .cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+}
+
+/* ---------- Etiqueta "Nuevo" y botón de agregar en la tarjeta ---------- */
+.etiqueta-nuevo {
+  position: absolute; top: 10px; left: 10px; z-index: 1; background: #FACC15; color: #0D0D0D;
+  font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px;
+}
+.add { width: 100%; margin-top: 6px; }
+
+/* ---------- Carrito (botón negro abajo a la derecha) ---------- */
+.fab {
+  position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 40;
+  width: 62px; height: 62px; border-radius: 50%; border: 2px solid #FACC15; background: #0D0D0D; color: #FACC15;
+  display: grid; place-items: center; cursor: pointer; box-shadow: 0 16px 34px -10px rgba(0, 0, 0, .6);
+  transition: transform .2s;
+}
+.fab:hover { transform: translateY(-3px) scale(1.03); }
+.fab svg {
+  width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.fab-num {
+  position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px;
+  background: #FACC15; color: #0D0D0D; font-size: 12px; font-weight: 800; display: grid; place-items: center;
+  border: 2px solid #0D0D0D;
+}
+.fab.pulso { animation: pulso .6s ease; }
+@keyframes pulso {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Ficha: opciones y acciones ---------- */
+.acciones-detalle { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.acciones-detalle .btn { flex: 1 1 auto; }
+
+/* ---------- Pedido (carrito) ---------- */
+.pedido h2 { font-size: 28px; margin-bottom: 4px; }
+.lineas-car { list-style: none; margin: 14px 0 0; padding: 0; }
+.linea-car {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 12px 0; border-bottom: 1px dashed var(--line);
+}
+.linea-car.no-disp { opacity: .5; }
+.car-foto {
+  aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: var(--foto); display: grid; place-items: center;
+  border: 1.5px solid var(--line);
+}
+.car-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.car-info b { font-size: 15px; line-height: 1.25; }
+.car-info small { color: var(--muted); font-size: 12.5px; }
+.car-info strong { font-size: 15px; margin-top: 2px; }
+.car-acc { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.car-acc .x { font-size: 12.5px; }
+.total-car { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 4px; font-weight: 700; }
+.total-car strong { font-size: 24px; font-weight: 800; }
+.acciones-pedido { display: grid; gap: 10px; margin-top: 12px; }
+.pedido-btn {
+  display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; border-radius: 16px;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--ink); text-decoration: none;
+}
+.pedido-btn b { font-size: 16px; }
+.pedido-btn small { color: var(--muted); font-size: 12.5px; }
+.pedido-btn:hover { border-color: var(--acc); }
+.pedido-btn.principal { background: #FACC15; border-color: #FACC15; color: #0D0D0D; }
+.pedido-btn.principal small { color: #0D0D0D; opacity: .75; }
+.link-vaciar {
+  all: unset; cursor: pointer; display: block; margin: 14px auto 0; color: var(--muted);
+  text-decoration: underline; font-size: 13px;
+}
+.vacio-car { text-align: center; color: var(--muted); padding: 34px 10px; }
+
+/* ---------- Botón de cerrar (ventanas) en amarillo, para que se vea ---------- */
+.x.cerrar {
+  top: 12px; right: 12px; width: 38px; height: 38px; border-radius: 50%; padding: 0;
+  display: grid; place-items: center; background: #FACC15; color: #0D0D0D; font-size: 16px;
+}
+.x.cerrar:hover { background: #FFF176; color: #0D0D0D; }
+
 /* ---------- Móvil ---------- */
 @media (max-width: 900px) {
   .venta-grid, .grid-2 { grid-template-columns: 1fr; }
@@ -400,10 +492,42 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color:
   .specs { grid-template-columns: 1fr; }
   .fila-car, .fila-var, .fila-doc { grid-template-columns: 1fr; }
   .tabs button { padding: 7px 10px; }
-  .grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .foto { aspect-ratio: 4 / 3; }
+  .pick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-datos li { font-size: 12px; padding: 5px 10px; }
+  .cuerpo { padding: 9px 10px 11px; gap: 4px; }
+  .cuerpo h3 { font-size: 14px; }
+  .tipo { font-size: 10px; }
+  .fila-precio strong { font-size: 15px; }
+  .grid-adm { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .miniaturas { grid-template-columns: repeat(4, 1fr); }
-  .banner { aspect-ratio: 4 / 3; border-radius: 18px; }
   .entrada-entrar { padding: 14px 34px; }
   .entrada-tag { font-size: 10.5px; letter-spacing: .16em; }
   .zoom-nav span { min-width: 0; }
+}
+
+/* Celular: el menú pasa a una barra inferior con iconos (como en el panel de Tuli) */
+@media (max-width: 760px) {
+  .tabs, .quien { display: none; }
+  .panel-main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 2px;
+    justify-content: space-around; background: var(--card); border-top: 1.5px solid var(--line);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 30px -16px rgba(0, 0, 0, .55);
+  }
+  .tabbar button {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    font: inherit; font-size: 11px; font-weight: 700; color: var(--muted); background: none; border: 0;
+    padding: 7px 2px; border-radius: 14px; cursor: pointer;
+  }
+  .tabbar button.on { background: var(--acc); color: #0D0D0D; }
+  .tabbar button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body.panel .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+
+/* En pantallas táctiles el "hover" queda pegado después de tocar: se quita el efecto de elevar y agrandar */
+@media (hover: none) {
+  .card-prod:hover, .prod-adm:hover, .pick:hover:not(:disabled), .car-item:hover, .foto-pf:hover, .cat:hover, .fab:hover { transform: none; }
+  .card-prod:hover .foto img, .prod-adm:hover .foto img { transform: none; }
 }
