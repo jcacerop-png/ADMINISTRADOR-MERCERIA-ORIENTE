@@ -11,11 +11,3 @@ const CONFIG = {
   WHATSAPP: "584248901496",
 };
 
-// Tipos de producto (el nombre que ve la clienta)
-const TIPOS = {
-  maquina: "Máquinas de coser",
-  hilo: "Hilos",
-  tela: "Telas",
-  bisuteria: "Bisutería",
-  otro: "Otros",
-};
