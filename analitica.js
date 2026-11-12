@@ -311,7 +311,7 @@ function descargarExcel() {
     const costo = r.lineas.filter(l => l.nombre === p.nombre).reduce((a, l) => a + (Number(l.costo) || 0) * (Number(l.cantidad) || 0), 0);
     const tipo = (r.lineas.find(l => l.nombre === p.nombre) || {}).tipo;
     filasProd.push([
-      celda(p.nombre), celda(TIPOS[tipo] || "—"),
+      celda(p.nombre), celda(CATEGORIAS[tipo] || "—"),
       celda(p.unidades, FORMATO_ENTERO), celda(p.ingresos, FORMATO_USD),
       celda(costo, FORMATO_USD), celda(p.ganancia, FORMATO_USD),
     ]);
@@ -344,7 +344,7 @@ function descargarExcel() {
       const costo = Number(it.costo) || 0;
       filasDet.push([
         celda(f2(d)), celda(d.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" })),
-        celda(idx + 1, FORMATO_ENTERO), celda(v.metodo || ""), celda(it.nombre || ""), celda(TIPOS[it.tipo] || ""),
+        celda(idx + 1, FORMATO_ENTERO), celda(v.metodo || ""), celda(it.nombre || ""), celda(CATEGORIAS[it.tipo] || ""),
         celda(it.variante || ""), celda(cant, FORMATO_ENTERO), celda(precio, FORMATO_USD),
         celda(precio * cant, FORMATO_USD), celda(costo, FORMATO_USD), celda((precio - costo) * cant, FORMATO_USD),
         celda(v.usuaria || ""), celda(v.nota || ""),
