@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es" data-theme="oscuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0D0D">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Mercería de Oriente · Administración</title>
+  <link rel="icon" href="logo.png">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; base-uri 'self'; object-src 'none'">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="panel">
+
+  <!-- ================= LOGIN ================= -->
+  <section id="login" class="login" hidden>
+    <form id="loginForm" class="card login-card">
+      <img class="logo-login" src="logo.png" alt="Logo de Mercería de Oriente">
+      <h1>Mercería de Oriente</h1>
+      <p class="muted small" style="text-align:center">Panel de administración</p>
+
+      <label>Cuenta
+        <select id="selCuenta" name="cuenta">
+          <option value="rodolfo019@merceria.com">Rodolfo</option>
+          <option value="administrador029@merceria.com">Administrador</option>
+        </select>
+      </label>
+      <p class="rol" id="rolCuenta">Dueño</p>
+
+      <label>Contraseña
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <p class="error" id="loginError" hidden>Contraseña incorrecta.</p>
+      <button class="btn" type="submit" id="btnEntrar">Entrar</button>
+    </form>
+  </section>
+
+  <!-- ================= PANEL ================= -->
+  <div id="app" hidden>
+    <header class="top">
+      <div class="wrap bar">
+        <div class="brand">
+          <img class="logo" src="logo.png" alt="">
+          <span class="marca">Mercería<br><small>de Oriente · Gestión</small></span>
+        </div>
+        <nav class="tabs">
+          <button data-tab="inicio" class="on">Inicio</button>
+          <button data-tab="venta">Venta rápida</button>
+          <button data-tab="catalogo">Catálogo</button>
+          <button data-tab="carrusel">Carrusel</button>
+          <button data-tab="analitica">Analítica</button>
+          <button data-tab="notas">Notas</button>
+        </nav>
+        <div class="acciones">
+          <span class="quien" id="quien"></span>
+          <button class="btn ghost sm" data-tema aria-label="Cambiar tema">🌙 Tema oscuro</button>
+          <button class="btn ghost sm" data-action="salir">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap panel-main">
+
+      <!-- INICIO -->
+      <section data-view="inicio" class="view">
+        <span class="eyebrow">Resumen</span>
+        <h1 id="saludo"></h1>
+        <div class="kpis" id="kpis"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Poca existencia</h3>
+            <ul class="lista" id="bajos" style="margin-top:10px"></ul>
+          </div>
+          <div class="card">
+            <h3>Actividad reciente</h3>
+            <ul class="lista" id="feed" style="margin-top:10px"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- VENTA RÁPIDA -->
+      <section data-view="venta" class="view" hidden>
+        <div class="venta-grid">
+          <div class="card">
+            <h3>Buscar prenda</h3>
+            <input id="buscarVenta" class="input" placeholder="Escribe el nombre o la categoría…" autocomplete="off" style="margin-top:10px">
+            <div id="resVenta" class="pick-grid"></div>
+            <div id="selVenta"></div>
+          </div>
+
+          <div class="card">
+            <h3>Venta actual</h3>
+            <ul id="lineasVenta" class="lista" style="margin-top:10px"></ul>
+            <div class="total-venta"><span>Total</span><strong id="totalVenta">$0.00</strong></div>
+            <label>Método de pago
+              <select id="metodoVenta">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Zelle">Zelle</option>
+                <option value="Pago móvil">Pago móvil</option>
+                <option value="Punto de venta">Punto de venta</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </label>
+            <label style="margin-top:10px">Nota (opcional)
+              <input id="notaVenta" maxlength="300" autocomplete="off">
+            </label>
+            <button class="btn" id="btnCobrar" disabled style="width:100%;margin-top:14px">Confirmar venta</button>
+            <button class="btn ghost" id="btnVaciar" style="width:100%;margin-top:8px">Vaciar</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-head">
+            <h3>Ventas de hoy</h3>
+            <strong id="totalHoy"></strong>
+          </div>
+          <ul class="lista" id="ventasHoy" style="margin-top:10px"></ul>
+        </div>
+      </section>
+
+      <!-- CATÁLOGO -->
+      <section data-view="catalogo" hidden>
+        <div class="toolbar">
+          <input id="buscarAdm" class="input" placeholder="Buscar producto…" autocomplete="off">
+          <button class="btn ghost sm" data-action="exportar">Exportar inventario</button>
+          <button class="btn ghost sm" data-action="plantillas">Editar plantillas</button>
+          <button class="btn" data-action="nuevo">+ Nuevo producto</button>
+        </div>
+        <div class="chips" id="chipsAdm"></div>
+        <div class="grid-adm" id="gridAdm"></div>
+      </section>
+
+      <!-- CARRUSEL -->
+      <section data-view="carrusel" class="view" hidden>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h3>Carrusel de fotos</h3>
+              <p class="hint" style="margin:4px 0 0">Son el fondo de la pantalla de entrada del catálogo. Máximo 10. Usa ▲ y ▼ para ordenarlas.</p>
+            </div>
+            <label class="btn sm" style="cursor:pointer">+ Subir fotos
+              <input type="file" id="carIn" accept="image/*" multiple class="sr">
+            </label>
+          </div>
+          <p class="muted small" id="carCuenta" style="margin-top:8px"></p>
+          <div class="car-grid" id="carGrid"></div>
+        </div>
+      </section>
+
+      <!-- ANALÍTICA -->
+      <section data-view="analitica" class="view" hidden>
+        <div class="toolbar">
+          <div class="seg" id="segModo">
+            <button data-modo="dia" class="on">Día</button>
+            <button data-modo="semana">Semana</button>
+            <button data-modo="mes">Mes</button>
+            <button data-modo="anio">Año</button>
+          </div>
+          <div class="zoom-nav">
+            <button class="btn ghost sm" id="pAtras" aria-label="Periodo anterior">◀</button>
+            <span id="periodoTxt"></span>
+            <button class="btn ghost sm" id="pAdel" aria-label="Periodo siguiente">▶</button>
+            <button class="btn ghost sm" id="zOut" aria-label="Ver más periodos" title="Ver más periodos">−</button>
+            <button class="btn ghost sm" id="zIn" aria-label="Ver menos periodos" title="Ver menos periodos">+</button>
+          </div>
+          <button class="btn" id="btnExcel">Descargar Excel del periodo</button>
+        </div>
+
+        <div class="kpis" id="kpisVenta"></div>
+
+        <div class="card">
+          <div class="chart-wrap"><canvas id="grafico"></canvas></div>
+          <p class="muted small" id="graficoVacio"></p>
+        </div>
+
+        <div class="rank-grid" id="rankings" style="margin-top:16px"></div>
+
+        <div class="grid-2" style="margin-top:16px">
+          <div class="card">
+            <h3>Ventas del periodo</h3>
+            <ul class="lista" id="ventasPeriodo" style="margin-top:10px"></ul>
+          </div>
+          <div class="card">
+            <h3>Métodos de pago</h3>
+            <ul class="lista" id="metodosPago" style="margin-top:10px"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- NOTAS -->
+      <section data-view="notas" class="view" hidden>
+        <div class="card">
+          <h3>Notas y recordatorios</h3>
+          <p class="hint" style="margin:4px 0 12px">Pendientes. Marca lo que ya hiciste.</p>
+          <form id="formNota" class="form-nota">
+            <input name="texto" required maxlength="300" placeholder="Escribe un pendiente…" autocomplete="off" aria-label="Nueva nota">
+            <button class="btn sm" type="submit">Agregar</button>
+          </form>
+          <ul class="lista" id="listaNotas" style="margin-top:12px"></ul>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Barra inferior con iconos (se ve solo en el celular) -->
+    <nav class="tabbar" aria-label="Secciones">
+      <button data-tab="inicio" class="on">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+        <span>Inicio</span>
+      </button>
+      <button data-tab="venta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+        <span>Venta</span>
+      </button>
+      <button data-tab="catalogo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span>Catálogo</span>
+      </button>
+      <button data-tab="carrusel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
+        <span>Carrusel</span>
+      </button>
+      <button data-tab="analitica">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M2 20h20"/></svg>
+        <span>Analítica</span>
+      </button>
+      <button data-tab="notas">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l2 2 4-4M8 16h8"/></svg>
+        <span>Notas</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="modal" class="modal" hidden><div class="sheet" role="dialog" aria-modal="true"></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Librerías (versiones fijas) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Lógica -->
+  <script src="config.js"></script>
+  <script src="comun.js"></script>
+  <script src="admin.js"></script>
+  <script src="analitica.js"></script>
+  <script src="venta.js"></script>
+  <script src="carrusel.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 6)
+
+Archivos de esta carpeta:
+  Administracion.html       Panel (Inicio, Venta rápida, Catálogo, Carrusel, Analítica, Notas)
+  admin.js                  Lógica general del panel (login, catálogo, plantillas, notas, duplicar, exportar)
+  venta.js                  Venta rápida
+  analitica.js              Analítica y Excel del periodo
+  carrusel.js               Fotos del carrusel (fondo de la entrada del catálogo)
+  comun.js                  Compartido: categorías de productos y funciones comunes
+  config.js                 Configuración (lleva tus datos de Supabase)
+  styles.css                Diseño (negro y amarillo, tema claro y oscuro)
+  logo.png                  Logo
+  supabase-merceria.sql     Base de datos inicial (ya ejecutada: NO volver a correrla)
+  supabase-merceria-v2.sql  Actualización 2 (ya ejecutada: NO volver a correrla)
+  supabase-merceria-v3.sql  Actualización 3: vista del catálogo y categorías nuevas (ver paso 1)
+
+Pasos para esta actualización (versión 6):
+1. Base de datos: en Supabase, abre SQL Editor, pega el contenido de supabase-merceria-v3.sql
+   y dale Run. Es seguro correrlo aunque ya lo hayas corrido antes. No borra datos.
+2. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
+   Administracion.html, admin.js, venta.js, analitica.js, carrusel.js, comun.js, styles.css.
+   (comun.js es obligatorio: ahí están las categorías.)
+   NO subas config.js: conserva el tuyo, que ya tiene tus datos de Supabase.
+   (Si tu config.js tiene un bloque "TIPOS", puedes borrarlo: ya no se usa.)
+
+Novedades:
+- Categorías nuevas: Accesorios metálicos, Accesorios plásticos, Cierres, Cordones, Tijeras,
+  Crochet negro, Crochet blanco, Macutos negros, Macutos blancos y Repuestos. Aparecen en el filtro
+  del panel, al crear productos y en "Editar plantillas". Los nombres se pueden cambiar en comun.js.
+- Catálogo: botón "Duplicar" en cada producto. Crea una copia con "(copia)" en el nombre,
+  oculta y con existencias en cero, para que la edites sin empezar de cero.
+- Catálogo: botón "Exportar inventario" descarga un Excel con todos los productos: precio,
+  costo, existencias, valor a costo y valor a precio, con totales.
+- En la ventana de fotos, la X para quitar una foto ahora es amarilla y se ve bien.
+- Precios: puedes escribirlos con coma (12,50) o con punto (12.50).
+- Ganancia y costo solo se ven en el panel, nunca en el catálogo público.
+
+Notas:
+- Venta rápida descuenta las existencias en la base de datos. Si una prenda se queda sin piezas,
+  la venta se rechaza con un aviso claro.
+- Anular una venta devuelve las existencias y la marca como anulada (no se borra).
+- El Excel del periodo incluye Resumen, Por producto (con totales) y Detalle de ventas.
+
+Nunca pongas la clave "service_role" en ningún archivo.
