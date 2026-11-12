@@ -18,6 +18,16 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const usd = n => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/* Precios: el teclado numérico del iPhone solo tiene coma, así que se acepta coma o punto.
+   leerPrecio devuelve un número con 2 decimales, o null si el texto no es un precio válido. */
+const leerPrecio = v => {
+  const s = String(v ?? "").trim().replace(/\s/g, "").replace(",", ".");
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+};
+const escribirPrecio = v => (v === "" || v === null || v === undefined ? "" : String(v).replace(".", ","));
+
 function toast(msg) {
   const t = $("#toast");
   if (!t) return;
@@ -128,3 +138,27 @@ document.addEventListener("keydown", (e) => {
 });
 
 aplicarTema(localStorage.getItem("mo_tema") === "claro" ? "claro" : "oscuro");
+
+/* =========================================================
+   Categorías de productos. La clave se guarda en la base de datos;
+   el texto es el nombre que ve la clienta.
+   Para agregar una: añade la clave aquí y en la restricción
+   de supabase-merceria-v3.sql (sección de categorías).
+   ========================================================= */
+const CATEGORIAS = {
+  maquina: "Máquinas de coser",
+  hilo: "Hilos",
+  tela: "Telas",
+  bisuteria: "Bisutería",
+  otro: "Otros",
+  acce_met: "Accesorios metálicos",
+  acce_plast: "Accesorios plásticos",
+  cierre: "Cierres",
+  cordon: "Cordones",
+  tijera: "Tijeras",
+  crochet_neg: "Crochet negro",
+  crochet_blanc: "Crochet blanco",
+  macuto_neg: "Macutos negros",
+  macuto_blanc: "Macutos blancos",
+  repuesto: "Repuestos",
+};
