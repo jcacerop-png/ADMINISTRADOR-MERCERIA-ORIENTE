@@ -181,7 +181,7 @@ function tarjetaAdm(p) {
   <article class="card prod-adm ${p.activo ? "" : "oculto"}">
     <div class="foto">${foto ? `<img src="${esc(foto)}" data-zoom="${esc(foto)}" alt="${esc(p.nombre)}">` : `<span class="sin-foto">Sin foto</span>`}</div>
     <div class="cuerpo">
-      <span class="tipo">${esc(TIPOS[p.tipo] || "")}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
+      <span class="tipo">${esc(CATEGORIAS[p.tipo] || "")}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
       <h3>${esc(p.nombre)}</h3>
       <div class="fila-precio">
         <strong>${usd(p.precio)}</strong>
@@ -190,6 +190,7 @@ function tarjetaAdm(p) {
       <div class="acciones-card">
         <button class="btn sm" data-action="editar" data-id="${esc(p.id)}">Editar</button>
         <button class="btn sm ghost" data-action="activo" data-id="${esc(p.id)}">${p.activo ? "Ocultar" : "Publicar"}</button>
+        <button class="btn sm ghost" data-action="duplicar" data-id="${esc(p.id)}">Duplicar</button>
         <button class="btn sm peligro" data-action="borrar" data-id="${esc(p.id)}">Eliminar</button>
       </div>
     </div>
@@ -197,14 +198,14 @@ function tarjetaAdm(p) {
 }
 
 function pintarCatalogo() {
-  $("#chipsAdm").innerHTML = [["todos", "Todos"], ...Object.entries(TIPOS)]
+  $("#chipsAdm").innerHTML = [["todos", "Todos"], ...Object.entries(CATEGORIAS)]
     .map(([k, l]) => `<button class="chip ${adm.chip === k ? "on" : ""}" data-chip="${k}">${esc(l)}</button>`)
     .join("");
 
   const q = adm.q.trim().toLowerCase();
   const lista = adm.productos.filter(p =>
     (adm.chip === "todos" || p.tipo === adm.chip) &&
-    (!q || `${p.nombre} ${TIPOS[p.tipo] || ""}`.toLowerCase().includes(q)));
+    (!q || `${p.nombre} ${CATEGORIAS[p.tipo] || ""}`.toLowerCase().includes(q)));
 
   $("#gridAdm").innerHTML = lista.map(tarjetaAdm).join("")
     || `<p class="muted">Aún no hay productos. Usa “+ Nuevo producto” para empezar.</p>`;
@@ -271,7 +272,7 @@ function abrirFormulario(p) {
 function dibujarFormulario() {
   const f = adm.form;
   if (!f) return;
-  const opcionesTipo = Object.entries(TIPOS)
+  const opcionesTipo = Object.entries(CATEGORIAS)
     .map(([k, l]) => `<option value="${k}" ${f.tipo === k ? "selected" : ""}>${esc(l)}</option>`).join("");
 
   $("#modal .sheet").innerHTML = `
@@ -308,8 +309,8 @@ function dibujarFormulario() {
     <label>Descripción<textarea data-b="descripcion" rows="3" maxlength="1000">${esc(f.descripcion)}</textarea></label>
 
     <div class="grid-form">
-      <label>Precio de venta (USD)<input data-b="precio" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(f.precio)}"></label>
-      <label>Costo (USD) · solo lo ves tú<input data-b="costo" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(f.costo)}"></label>
+      <label>Precio de venta (USD)<input data-b="precio" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.precio))}"></label>
+      <label>Costo (USD) · solo lo ves tú<input data-b="costo" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.costo))}"></label>
     </div>
 
     <div class="tog-row">
@@ -425,10 +426,11 @@ async function guardarProducto(e) {
 
   const nombre = String(f.nombre || "").trim();
   if (!nombre) return toast("Escribe el nombre del producto");
-  if (!TIPOS[f.tipo]) return toast("Elige el tipo de producto");
-  if (String(f.precio).trim() === "" || !(Number(f.precio) >= 0)) return toast("Revisa el precio en dólares");
-  const costo = String(f.costo).trim() === "" ? 0 : Number(f.costo);
-  if (!(costo >= 0)) return toast("Revisa el costo");
+  if (!CATEGORIAS[f.tipo]) return toast("Elige el tipo de producto");
+  const precio = leerPrecio(f.precio);
+  if (precio === null) return toast("Revisa el precio en dólares (ejemplo: 12,50)");
+  const costo = String(f.costo ?? "").trim() === "" ? 0 : leerPrecio(f.costo);
+  if (costo === null) return toast("Revisa el costo (ejemplo: 5,00)");
 
   const documentos = f.documentos
     .map(d => ({ nombre: String(d.nombre || "").trim(), url: String(d.url || "").trim() }))
@@ -442,8 +444,8 @@ async function guardarProducto(e) {
     nombre: nombre.slice(0, 120),
     tipo: f.tipo,
     descripcion: String(f.descripcion || "").trim().slice(0, 1000),
-    precio: Math.round(Number(f.precio) * 100) / 100,
-    costo: Math.round(costo * 100) / 100,
+    precio,
+    costo,
     destacado: !!f.destacado,
     activo: !!f.activo,
     fotos: f.fotos,
@@ -496,6 +498,89 @@ async function borrarProducto(id) {
   await cargar();
 }
 
+/* ---------- Duplicar producto ---------- */
+// La copia queda oculta y sin existencias: se revisa, se le ponen existencias y se publica cuando se quiera
+async function duplicarProducto(id) {
+  const p = adm.productos.find(x => x.id === id);
+  if (!p) return;
+  const copia = {
+    nombre: `${p.nombre} (copia)`.slice(0, 120),
+    tipo: p.tipo,
+    descripcion: p.descripcion || "",
+    precio: p.precio,
+    costo: p.costo,
+    destacado: false,
+    activo: false,
+    fotos: [...(p.fotos || [])],
+    caracteristicas: (p.caracteristicas || []).map(c => ({ campo: c.campo, valor: c.valor })),
+    accesorios: [...(p.accesorios || [])],
+    usos: [...(p.usos || [])],
+    documentos: (p.documentos || []).map(d => ({ nombre: d.nombre, url: d.url })),
+    variantes: (p.variantes || []).map(v => ({ nombre: v.nombre, stock: 0 })),
+    actualizado_en: new Date().toISOString(),
+  };
+  const { error } = await sb.from("productos").insert(copia);
+  if (error) return toast("No se pudo duplicar: " + error.message);
+  toast("Copia creada (oculta). Edítala y publícala cuando quieras ✔");
+  await cargar();
+}
+
+/* ---------- Exportar inventario a Excel ---------- */
+// Usa "celda" y los formatos (FORMATO_USD, FORMATO_ENTERO) definidos en analitica.js
+function exportarInventario() {
+  if (typeof XLSX === "undefined") return toast("El generador de Excel no cargó. Revisa tu conexión.");
+  if (!adm.productos.length) return toast("Aún no hay productos para exportar");
+
+  const lista = [...adm.productos].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  const PRIMERA = 5; // las cuatro primeras filas son título, fecha, espacio y encabezados
+  const filas = [
+    [celda("MERCERÍA DE ORIENTE · INVENTARIO")],
+    [celda(`Generado: ${new Date().toLocaleString("es-VE")}`)],
+    [],
+    ["Producto", "Categoría", "Publicado", "Precio venta (USD)", "Costo (USD)", "Existencias", "Por variante", "Valor a costo (USD)", "Valor a precio (USD)"].map(t => celda(t)),
+  ];
+
+  lista.forEach((p, i) => {
+    const fila = PRIMERA + i;
+    const stock = stockDe(p);
+    const precio = Number(p.precio) || 0;
+    const costo = Number(p.costo) || 0;
+    const porVariante = (Array.isArray(p.variantes) ? p.variantes : [])
+      .map(v => `${v.nombre}: ${Number(v.stock) || 0}`).join(" · ");
+    filas.push([
+      celda(p.nombre),
+      celda(CATEGORIAS[p.tipo] || ""),
+      celda(p.activo ? "Sí" : "No (oculto)"),
+      celda(precio, FORMATO_USD),
+      celda(costo, FORMATO_USD),
+      celda(stock, FORMATO_ENTERO),
+      celda(porVariante),
+      celda(costo * stock, FORMATO_USD, `E${fila}*F${fila}`),
+      celda(precio * stock, FORMATO_USD, `D${fila}*F${fila}`),
+    ]);
+  });
+
+  const ultima = PRIMERA + lista.length - 1;
+  const totalStock = lista.reduce((a, p) => a + stockDe(p), 0);
+  const totalCosto = lista.reduce((a, p) => a + (Number(p.costo) || 0) * stockDe(p), 0);
+  const totalPrecio = lista.reduce((a, p) => a + (Number(p.precio) || 0) * stockDe(p), 0);
+  filas.push([
+    celda("TOTAL"), celda(""), celda(""), celda(""), celda(""),
+    celda(totalStock, FORMATO_ENTERO, `SUM(F${PRIMERA}:F${ultima})`),
+    celda(""),
+    celda(totalCosto, FORMATO_USD, `SUM(H${PRIMERA}:H${ultima})`),
+    celda(totalPrecio, FORMATO_USD, `SUM(I${PRIMERA}:I${ultima})`),
+  ]);
+
+  const libro = XLSX.utils.book_new();
+  const hoja = XLSX.utils.aoa_to_sheet(filas);
+  hoja["!cols"] = [{ wch: 40 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 36 }, { wch: 20 }, { wch: 20 }];
+  hoja["!autofilter"] = { ref: `A4:I${ultima}` };
+  XLSX.utils.book_append_sheet(libro, hoja, "Inventario");
+  XLSX.writeFile(libro, `Inventario_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  toast("Inventario exportado ✔");
+}
+
 /* ---------- Plantillas por tipo ---------- */
 function dibujarPlantillas() {
   const t = plantillaDe(adm.plantilla);
@@ -508,7 +593,7 @@ function dibujarPlantillas() {
     <p class="hint">Al crear un producto de este tipo se cargan estos campos, accesorios y usos. Cada producto puede cambiarlos.</p>
     <label>Tipo
       <select id="plTipo">
-        ${Object.entries(TIPOS).map(([k, l]) => `<option value="${k}" ${k === adm.plantilla ? "selected" : ""}>${esc(l)}</option>`).join("")}
+        ${Object.entries(CATEGORIAS).map(([k, l]) => `<option value="${k}" ${k === adm.plantilla ? "selected" : ""}>${esc(l)}</option>`).join("")}
       </select>
     </label>
     <label>Campos de características (uno por línea)
@@ -581,6 +666,8 @@ async function accion(nombre, el) {
     case "editar": return abrirFormulario(adm.productos.find(p => p.id === id));
     case "activo": return alternarPublicado(id);
     case "borrar": return borrarProducto(id);
+    case "duplicar": return duplicarProducto(id);
+    case "exportar": return exportarInventario();
     case "plantillas":
       adm.plantilla = "maquina";
       dibujarPlantillas();
