@@ -39,7 +39,7 @@ function refrescarVenta() {
 function vtBuscador() {
   const q = vt.q.trim().toLowerCase();
   const lista = adm.productos
-    .filter(p => !q || `${p.nombre} ${TIPOS[p.tipo] || ""}`.toLowerCase().includes(q))
+    .filter(p => !q || `${p.nombre} ${CATEGORIAS[p.tipo] || ""}`.toLowerCase().includes(q))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
   $("#resVenta").innerHTML = lista.map(p => {
@@ -69,7 +69,7 @@ function vtSeleccion() {
     <div class="sel-box">
       <div>
         <h4>${esc(p.nombre)}</h4>
-        <small class="muted">${usd(p.precio)} · ${esc(TIPOS[p.tipo] || "")}</small>
+        <small class="muted">${usd(p.precio)} · ${esc(CATEGORIAS[p.tipo] || "")}</small>
       </div>
       ${variantes.length ? `
         <div>
@@ -127,7 +127,7 @@ function vtCarrito() {
         <small>${esc(l.variante)} · ${l.cantidad} × ${usd(l.precio)}</small>
       </div>
       <div class="linea-r">
-        <input type="number" class="precio-in" min="0" step="0.01" inputmode="decimal" value="${esc(l.precio)}" data-vprecio="${i}" aria-label="Precio de ${esc(l.nombre)}">
+        <input type="text" class="precio-in" inputmode="decimal" autocomplete="off" value="${esc(escribirPrecio(l.precio))}" data-vprecio="${i}" aria-label="Precio de ${esc(l.nombre)}">
         <div class="stepper">
           <button type="button" data-vlc="${i}" data-d="-1" ${l.cantidad <= 1 ? "disabled" : ""} aria-label="Quitar uno">−</button>
           <span>${l.cantidad}</span>
@@ -251,7 +251,8 @@ document.addEventListener("input", (e) => {
   if (t.dataset && t.dataset.vprecio !== undefined) {
     const l = vt.carrito[Number(t.dataset.vprecio)];
     if (!l) return;
-    l.precio = Math.max(0, Number(t.value) || 0);
+    const precio = leerPrecio(t.value);
+    l.precio = precio === null ? 0 : precio;
     $("#totalVenta").textContent = usd(vtTotal());
   }
 });
