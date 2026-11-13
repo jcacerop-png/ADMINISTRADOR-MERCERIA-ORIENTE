@@ -1,0 +1,51 @@
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 10)
+
+Archivos de esta carpeta:
+  Administracion.html       Panel (menú lateral con íconos: Inicio, Venta, Catálogo, Inventario, Cashea, Carrusel, Analítica, Notas)
+  admin.js                  Lógica general del panel (login, catálogo, plantillas, notas)
+  categorias.js             Categorías: crear, renombrar, ocultar, ordenar y borrar
+  inventario.js             Inventario: lista, buscador e importación desde Excel o CSV
+  cashea.js                 Ventas por Cashea Express: registrar, comprobar el pago, detalle, cobrar, anular y exportar
+  venta.js                  Venta rápida
+  analitica.js              Analítica y Excel del periodo
+  carrusel.js               Fotos del carrusel (fondo de la entrada del catálogo)
+  comun.js                  Compartido (funciones comunes y orden por arrastre)
+  config.js                 Tus datos de Supabase (ya incluidos: no lo cambies)
+  styles.css                Diseño (negro y amarillo, tema claro y oscuro)
+  logo.png                  Logo
+  supabase-merceria-v4.sql  Actualización 4 (ya ejecutada)
+  supabase-merceria-v5.sql  Actualización 5: Cashea (ya ejecutada)
+  supabase-merceria-v6.sql  Actualización 6: Cashea en dólares (ya ejecutada)
+  supabase-merceria-v7.sql  Actualización 7: cuotas (ya ejecutada; sus datos se quitan con la v8)
+  supabase-merceria-v8.sql  Actualización 8: Cashea Express (inicial 40%, descuentos 8%, comprobación del pago)
+
+Pasos para esta actualización (versión 10):
+1. Base de datos: en Supabase, abre SQL Editor, pega el contenido de supabase-merceria-v8.sql y dale Run.
+   Es seguro correrlo más de una vez y no borra ventas.
+   Esta actualización QUITA las cuotas, el porcentaje variable y las cuotas pagadas de la versión 7.
+   Si tenías ventas con esos datos, sus cuotas se pierden; el monto total y la tasa se conservan.
+   Cada venta queda con inicial 40% y descuentos 4% + 4%.
+2. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
+   Administracion.html, admin.js, cashea.js, styles.css y comun.js.
+   Los demás archivos no cambiaron: no hace falta subirlos otra vez.
+   NO subas config.js si ya lo tienes: conserva el tuyo.
+3. Súbelo al mismo lugar donde está el panel (GitHub o Netlify).
+
+Cómo funciona Cashea Express en el panel:
+- Inicial 40%: la clienta la paga en caja en bolívares, a la tasa BCV de la venta.
+- Financiado: el resto (60%). Lo debe Cashea al comercio.
+- Cashea descuenta 8% del monto total: 4% por servicio tecnológico y 4% por adelanto.
+- Liquidación esperada (USD) = financiado − 8%. Esto es lo que debe llegar en la liquidación.
+- Comprobar (botón en cada venta): cuando llegue el pago de Cashea, escribe los bolívares que llegaron,
+  la tasa BCV de ese día y la fecha. El panel calcula:
+    · lo esperado a la tasa de la venta,
+    · la diferencia por variación de la tasa BCV,
+    · el descuento real que se llevó Cashea (y su porcentaje),
+    · si Cashea descontó de más, de menos o cuadra (tolerancia de 50 centavos de dólar).
+- En la lista verás la columna "Pago de Cashea" con la etiqueta de cada venta.
+- "Por cobrar a Cashea" suma la liquidación esperada de las ventas pendientes que aún no se comprobaron.
+- Las ventas no se borran: se anulan. Cada cambio y cada comprobación queda en Actividad con la cuenta que lo hizo.
+- Los porcentajes de cada venta se guardan con la venta: si después cambian las reglas, las ventas viejas no se mueven.
+- Solo el panel la ve. Nunca aparece en el catálogo público.
+
+Nunca pongas la clave "service_role" en ningún archivo.
