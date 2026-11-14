@@ -744,3 +744,40 @@ body.panel .panel-main { min-width: 0; }
 .pill-comp.menos { color: #D97706; }
 .pill-comp.sin { color: var(--muted); border-style: dashed; }
 #casheaTabla td:first-child { white-space: nowrap; }
+
+/* ---------- v9: tiendas de Cashea, subsecciones y cierre de mes ---------- */
+[hidden] { display: none !important; }
+#casheaTabla .tabla-inv { min-width: 1360px; }
+.pill-tienda {
+  display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line); white-space: nowrap;
+}
+.subtabs { display: none; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 10px 0 4px; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button {
+  flex: 0 0 auto; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--muted);
+  padding: 8px 14px; border-radius: 999px;
+}
+.subtabs button.on { background: var(--acc); color: #0D0D0D; border-color: transparent; }
+@media (max-width: 760px) { .subtabs { display: flex; } }
+body.panel .lateral .tabs button.sub { padding-left: 40px; font-size: 14px; }
+.tabla-scroll { overflow-x: auto; }
+.tabla-inv tr.fila-total td { font-weight: 700; border-top: 2px solid var(--line); }
+.cierre-aviso { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 12px 0; }
+.cierre-aviso p { margin: 0; }
+.cierre-aviso .btn { white-space: nowrap; }
+#cierreEstado p { margin: 4px 0; }
+.cierre-periodo { display: flex; flex-direction: column; gap: 4px; font-weight: 700; font-size: 13px; }
+.cierre-periodo select { width: auto; min-width: 220px; }
+.sub-titulo { margin: 22px 0 8px; font-size: 18px; }
+
+/* ---------- v11b: catálogo del panel en computadora (tarjetas más compactas) ---------- */
+@media (min-width: 761px) {
+  body.panel .grid-adm { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  body.panel .prod-adm .foto { aspect-ratio: 4 / 3; }
+  body.panel .prod-adm .cuerpo { padding: 12px 14px 14px; }
+}
+@media (min-width: 1100px) {
+  body.panel .grid-adm { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+}

@@ -8,6 +8,11 @@
    - Comprobación: cuando llega el pago de Cashea se anota lo recibido en bolívares,
      la tasa BCV de ese día y la fecha. La app separa la diferencia en la variación
      por tasa BCV y el descuento de más o de menos de Cashea.
+   - Cada venta pertenece a una tienda (DECOCINTAS, Mercería de Oriente o Caracas).
+     "Cashea total" muestra las tres; cada tienda tiene su propia sección.
+   - Cada venta guarda cédula y método de pago de la inicial.
+   - Una venta cobrada o anulada solo muestra Detalle.
+   - Un mes cerrado (ver cierre.js) no permite cambiar los datos de sus ventas.
    Las ventas no se borran: se anulan.
    ========================================================= */
 
@@ -15,7 +20,10 @@ const ESTADOS_CASHEA = { pendiente: "Pendiente", cobrada: "Cobrada", anulada: "A
 const CASHEA_PCT = { inicial: 40, comision: 4, adelanto: 4 }; // valores de cada venta nueva (%)
 const CASHEA_TOLERANCIA_USD = 0.5; // una diferencia menor a esto se considera "cuadra"
 const RESULTADO_CASHEA = { cuadra: "Cuadra", mas: "Le descontó de más", menos: "Le descontó de menos", sin: "Sin comprobar" };
-const vistaCashea = { filtro: "todas", q: "" }; // solo lo que se ve en pantalla
+const TIENDAS_CASHEA = { decocintas: "DECOCINTAS", merceria: "Mercería de Oriente", caracas: "Caracas" };
+const METODOS_PAGO_CASHEA = ["Efectivo USD", "Efectivo Bs", "Pago móvil", "Transferencia", "Punto de venta", "Zelle", "Otro"];
+const TAB_TIENDA_CASHEA = { cashea: "todas", "cashea-decocintas": "decocintas", "cashea-merceria": "merceria", "cashea-caracas": "caracas" };
+const vistaCashea = { filtro: "todas", q: "", tienda: "todas" }; // solo lo que se ve en pantalla
 
 // Números en formato venezolano: 1.250,50
 const numeroVE = n => {
@@ -45,6 +53,13 @@ function campoNumero(n, decimales) {
   return entero + "," + dec.replace(/0+$/, "").padEnd(2, "0");
 }
 
+// Cédula: V, E, J o G seguido de 5 a 10 números. Sin letra se toma como V. Devuelve "V-12345678" o null.
+function normalizarCedula(texto) {
+  const s = String(texto ?? "").toUpperCase().replace(/[\s-]/g, "");
+  const m = s.match(/^([VEJG])?(\d{5,10})$/);
+  return m ? `${m[1] || "V"}-${m[2]}` : null;
+}
+
 const hoyISO = () => {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -55,11 +70,14 @@ const fechaTxt = f => {
   return y ? `${d}/${m}/${y}` : "";
 };
 const fechaHoraTxt = iso => (iso ? new Date(iso).toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+const periodoDe = fecha => String(fecha || "").slice(0, 7);
+const mesActualPeriodo = () => hoyISO().slice(0, 7);
 function esDelMesActual(iso) {
   if (!iso) return false;
   const d = new Date(iso), h = new Date();
   return d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth();
 }
+const mesCerrado = periodo => (adm.cierres || []).some(c => c.periodo === periodo);
 
 /* ---------- Cálculos (las mismas fórmulas que la base de datos) ---------- */
 function calculoCashea(v) {
@@ -120,34 +138,58 @@ const pillCompCashea = v => {
 };
 
 /* ---------- Lectura ---------- */
+// Cada pestaña de Cashea muestra solo su tienda (o todas, en "Cashea total")
+function fijarTiendaCashea(tab) {
+  vistaCashea.tienda = TAB_TIENDA_CASHEA[tab] || "todas";
+}
+
 async function refrescarCashea() {
   try {
-    const { data, error } = await sb.from("cashea_ventas").select("*")
-      .order("fecha", { ascending: false })
-      .order("creado_en", { ascending: false })
-      .limit(2000);
-    if (error) throw error;
-    adm.cashea = data || [];
+    const [ventas, cierres] = await Promise.all([
+      sb.from("cashea_ventas").select("*")
+        .order("fecha", { ascending: false })
+        .order("creado_en", { ascending: false })
+        .limit(2000),
+      sb.from("cierres_mensuales").select("*").order("periodo", { ascending: false }),
+    ]);
+    if (ventas.error) throw ventas.error;
+    adm.cashea = ventas.data || [];
+    if (cierres.error) {
+      adm.cierres = [];
+      toast("Los cierres de mes aún no existen en la base de datos: corre la v9 en Supabase.");
+    } else {
+      adm.cierres = cierres.data || [];
+    }
     pintarCashea();
+    if (typeof pintarCierre === "function") pintarCierre();
   } catch (err) {
     toast("No se pudieron cargar las ventas Cashea: " + (err.message || "error"));
   }
 }
 
+// Ventas de la tienda de la sección abierta
+function casheaDeTienda() {
+  return adm.cashea.filter(v => vistaCashea.tienda === "todas" || v.tienda === vistaCashea.tienda);
+}
+
 function casheaFiltradas() {
   const q = normaTexto(vistaCashea.q);
-  return adm.cashea.filter(v =>
+  return casheaDeTienda().filter(v =>
     (vistaCashea.filtro === "todas" || v.estado === vistaCashea.filtro) &&
-    (!q || normaTexto(`${v.factura} ${v.nombre} ${v.apellido}`).includes(q)));
+    (!q || normaTexto(`${v.factura} ${v.nombre} ${v.apellido} ${v.cedula || ""}`).includes(q)));
 }
 
 /* ---------- Pantalla ---------- */
 function pintarCashea() {
   const sumar = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
-  const todas = adm.cashea.map(v => ({ v, c: calculoCashea(v), r: compararCashea(v) }));
+  const base = casheaDeTienda();
+  const todas = base.map(v => ({ v, c: calculoCashea(v), r: compararCashea(v) }));
   const porCobrar = todas.filter(x => x.v.estado === "pendiente" && !x.r);
   const delMes = todas.filter(x => x.r && esDelMesActual(x.v.liq_fecha));
   const conDif = todas.filter(x => x.r && x.r.estado !== "cuadra" && x.v.estado !== "anulada");
+
+  const titulo = vistaCashea.tienda === "todas" ? "Cashea total" : `Cashea ${TIENDAS_CASHEA[vistaCashea.tienda]}`;
+  $("#casheaTitulo").textContent = titulo;
 
   $("#casheaKpis").innerHTML = [
     kpi("Por cobrar a Cashea (USD)", usd(redondeo2(sumar(porCobrar, x => x.c.liquidacionUsd)))),
@@ -158,31 +200,35 @@ function pintarCashea() {
 
   $$("[data-cfiltro]").forEach(b => b.classList.toggle("on", b.dataset.cfiltro === vistaCashea.filtro));
 
+  const mostrarTienda = vistaCashea.tienda === "todas";
   const lista = casheaFiltradas().map(v => ({ v, c: calculoCashea(v), r: compararCashea(v) }));
   $("#casheaResumen").textContent = lista.length
     ? `${lista.length} venta(s) · inicial en caja ${bsTxt(redondeo2(sumar(lista, x => x.c.inicialBs)))} · liquidación esperada ${usd(redondeo2(sumar(lista, x => x.c.liquidacionUsd)))}`
     : "";
+  const columnas = ["Factura", "Día", ...(mostrarTienda ? ["Tienda"] : []), "Cliente", "Cédula", "Total", "Inicial en caja", "Financiado", "Liquidación esperada", "Pago de Cashea", "Estado", "Acciones"];
   $("#casheaTabla").innerHTML = lista.length
     ? `<div class="cs-desk">
         <table class="tabla-inv">
-          <thead><tr><th>Factura</th><th>Día</th><th>Cliente</th><th>Total</th><th>Inicial en caja</th><th>Financiado</th><th>Liquidación esperada</th><th>Pago de Cashea</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody>${lista.map(x => filaCashea(x.v, x.c, x.r)).join("")}</tbody>
+          <thead><tr>${columnas.map(c => `<th>${c}</th>`).join("")}</tr></thead>
+          <tbody>${lista.map(x => filaCashea(x.v, x.c, x.r, mostrarTienda)).join("")}</tbody>
         </table>
       </div>
-      <div class="cs-movil">${lista.map(x => tarjetaCashea(x.v, x.c, x.r)).join("")}</div>`
+      <div class="cs-movil">${lista.map(x => tarjetaCashea(x.v, x.c, x.r, mostrarTienda)).join("")}</div>`
     : `<p class="muted" style="padding:14px 8px">${todas.length
         ? "No hay ventas con este filtro."
         : "Todavía no hay ventas Cashea registradas. Usa “+ Nueva venta”."}</p>`;
 }
 
+// Acciones según el estado: pendiente (todas), cobrada o anulada (solo Detalle)
 function botonesCashea(v) {
   const id = esc(v.id);
   const b = [`<button class="btn ghost sm" data-cashea="detalle" data-id="${id}">Detalle</button>`];
-  if (v.estado !== "anulada") b.push(`<button class="btn sm" data-cashea="comprobar" data-id="${id}">Comprobar</button>`);
-  if (v.estado === "pendiente") b.push(`<button class="btn ghost sm" data-cashea="estado" data-id="${id}" data-estado="cobrada">Marcar cobrada</button>`);
-  if (v.estado === "cobrada") b.push(`<button class="btn ghost sm" data-cashea="estado" data-id="${id}" data-estado="pendiente">Dejar pendiente</button>`);
-  b.push(`<button class="btn ghost sm" data-cashea="editar" data-id="${id}">Editar</button>`);
-  if (v.estado !== "anulada") b.push(`<button class="btn ghost sm anular" data-cashea="estado" data-id="${id}" data-estado="anulada">Anular</button>`);
+  if (v.estado === "pendiente") {
+    b.push(`<button class="btn sm" data-cashea="comprobar" data-id="${id}">Comprobar</button>`);
+    b.push(`<button class="btn ghost sm" data-cashea="estado" data-id="${id}" data-estado="cobrada">Marcar cobrada</button>`);
+    if (!mesCerrado(periodoDe(v.fecha))) b.push(`<button class="btn ghost sm" data-cashea="editar" data-id="${id}">Editar</button>`);
+    b.push(`<button class="btn ghost sm anular" data-cashea="estado" data-id="${id}" data-estado="anulada">Anular</button>`);
+  }
   return b.join("");
 }
 
@@ -192,11 +238,13 @@ function celdaPagoCashea(r) {
     : `<span class="muted">Sin comprobar</span>`;
 }
 
-function filaCashea(v, c, r) {
+function filaCashea(v, c, r, mostrarTienda) {
   return `<tr class="${v.estado === "anulada" ? "anulada" : ""}">
     <td><strong>${esc(v.factura)}</strong></td>
     <td>${esc(fechaTxt(v.fecha))}</td>
+    ${mostrarTienda ? `<td><span class="pill-tienda">${esc(TIENDAS_CASHEA[v.tienda] || v.tienda)}</span></td>` : ""}
     <td>${esc(v.nombre)} ${esc(v.apellido)}</td>
+    <td>${esc(v.cedula || "—")}</td>
     <td>${usd(v.monto_total_usd)}</td>
     <td>${usd(c.inicialUsd)}<br><small class="muted">${bsTxt(c.inicialBs)}</small></td>
     <td>${usd(c.financiadoUsd)}</td>
@@ -207,14 +255,15 @@ function filaCashea(v, c, r) {
   </tr>`;
 }
 
-function tarjetaCashea(v, c, r) {
+function tarjetaCashea(v, c, r, mostrarTienda) {
   const estado = esc(v.estado);
+  const subtitulo = [fechaTxt(v.fecha), mostrarTienda ? TIENDAS_CASHEA[v.tienda] : ""].filter(Boolean).join(" · ");
   return `<article class="cs-card ${v.estado === "anulada" ? "anulada" : ""}">
     <header class="cs-card-cab">
-      <div><strong>${esc(v.factura)}</strong><small>${esc(fechaTxt(v.fecha))}</small></div>
+      <div><strong>${esc(v.factura)}</strong><small>${esc(subtitulo)}</small></div>
       <span class="pill-estado ${estado}">${ESTADOS_CASHEA[v.estado] || estado}</span>
     </header>
-    <p class="cs-cliente">${esc(v.nombre)} ${esc(v.apellido)}</p>
+    <p class="cs-cliente">${esc(v.nombre)} ${esc(v.apellido)}${v.cedula ? ` · <small class="muted">${esc(v.cedula)}</small>` : ""}</p>
     <dl class="cs-datos">
       <div><dt>Total</dt><dd>${usd(v.monto_total_usd)}</dd></div>
       <div><dt>Inicial en caja (${Number(v.pct_inicial)}%)</dt><dd>${usd(c.inicialUsd)}</dd><dd class="sub">${bsTxt(c.inicialBs)}</dd></div>
@@ -244,6 +293,10 @@ function abrirDetalleCashea(id) {
         ${v.liq_nota ? fila("Nota", esc(v.liq_nota)) : ""}
         ${v.liq_comprobado_por ? fila("Comprobada por", esc(v.liq_comprobado_por) + (v.liq_comprobado_en ? ` · ${esc(fechaHoraTxt(v.liq_comprobado_en))}` : "")) : ""}`
     : fila("Pago de Cashea", "Sin comprobar");
+  const acciones = v.estado === "pendiente"
+    ? `<button type="button" class="btn" data-cashea="comprobar" data-id="${esc(v.id)}">Comprobar</button>
+       ${mesCerrado(periodoDe(v.fecha)) ? "" : `<button type="button" class="btn ghost" data-cashea="editar" data-id="${esc(v.id)}">Editar</button>`}`
+    : "";
   $("#modal .sheet").innerHTML = `
     <div class="det-cashea">
       <div class="det-cab">
@@ -251,10 +304,13 @@ function abrirDetalleCashea(id) {
         <span class="pill-estado ${esc(v.estado)}">${ESTADOS_CASHEA[v.estado] || esc(v.estado)}</span>
       </div>
       <dl class="det-lista">
+        ${fila("Tienda", esc(TIENDAS_CASHEA[v.tienda] || v.tienda || "—"))}
         ${fila("Cliente", esc(`${v.nombre} ${v.apellido}`))}
+        ${fila("Cédula", esc(v.cedula || "Sin registrar"))}
         ${fila("Día de la venta", esc(fechaTxt(v.fecha)))}
         ${fila("Monto total", usd(v.monto_total_usd))}
         ${fila("Tasa BCV de la venta", numeroVE(v.tasa))}
+        ${fila("Método de pago de la inicial", esc(v.metodo_pago || "Sin registrar"))}
         ${fila(`Inicial en caja (${Number(v.pct_inicial)}%)`, `${usd(c.inicialUsd)} · ${bsTxt(c.inicialBs)}`)}
         ${fila("Financiado (lo debe Cashea)", usd(c.financiadoUsd))}
         ${fila(`Descuentos Cashea (${Number(v.pct_comision)}% servicio + ${Number(v.pct_adelanto)}% adelanto)`, `−${usd(c.descuentoUsd)}`)}
@@ -267,8 +323,7 @@ function abrirDetalleCashea(id) {
       </dl>
       <div class="acciones-sheet">
         <button type="button" class="btn ghost" data-cashea="cerrar">Cerrar</button>
-        ${v.estado !== "anulada" ? `<button type="button" class="btn" data-cashea="comprobar" data-id="${esc(v.id)}">Comprobar</button>` : ""}
-        <button type="button" class="btn ghost" data-cashea="editar" data-id="${esc(v.id)}">Editar</button>
+        ${acciones}
       </div>
     </div>`;
   abrirModal();
@@ -278,7 +333,7 @@ function abrirDetalleCashea(id) {
 function abrirComprobarCashea(id) {
   const v = adm.cashea.find(x => x.id === id);
   if (!v) return toast("No encontré esa venta.");
-  if (v.estado === "anulada") return toast("Una venta anulada no se comprueba.");
+  if (v.estado !== "pendiente") return toast("Solo se comprueban las ventas pendientes.");
   const c = calculoCashea(v);
   $("#modal .sheet").innerHTML = `
     <form id="formComprobar" class="form-cashea" data-id="${esc(v.id)}" novalidate>
@@ -369,19 +424,32 @@ async function guardarComprobarCashea(e) {
 function abrirFormCashea(id) {
   const v = id ? adm.cashea.find(x => x.id === id) : null;
   if (id && !v) return toast("No encontré esa venta.");
+  if (v && v.estado !== "pendiente") return toast("Solo se editan las ventas pendientes.");
+  if (v && mesCerrado(periodoDe(v.fecha))) return toast("Ese mes ya está cerrado: esta venta no se puede editar.");
   // La tasa sugerida es la de la venta más reciente (se puede cambiar)
   const tasaSugerida = v ? v.tasa : (adm.cashea[0] ? adm.cashea[0].tasa : "");
+  const tiendaFija = vistaCashea.tienda !== "todas" ? vistaCashea.tienda : null;
+  const opcionesTienda = Object.entries(TIENDAS_CASHEA)
+    .map(([k, n]) => `<option value="${k}" ${k === (v ? v.tienda : "") ? "selected" : ""}>${esc(n)}</option>`).join("");
+  const opcionesMetodo = METODOS_PAGO_CASHEA
+    .map(m => `<option value="${esc(m)}" ${v && v.metodo_pago === m ? "selected" : ""}>${esc(m)}</option>`).join("");
 
   $("#modal .sheet").innerHTML = `
     <form id="formCashea" class="form-cashea" data-id="${v ? esc(v.id) : ""}" novalidate>
       <h2>${v ? "Editar venta Cashea" : "Nueva venta Cashea"}</h2>
+      ${tiendaFija ? `<p class="muted small">Tienda: <b>${esc(TIENDAS_CASHEA[tiendaFija])}</b></p>` : ""}
       <div class="grid-form">
+        ${tiendaFija
+          ? `<input type="hidden" name="tienda" value="${tiendaFija}">`
+          : `<label>Tienda *<select name="tienda"><option value="">Elige la tienda…</option>${opcionesTienda}</select></label>`}
         <label>Factura *<input name="factura" maxlength="40" autocomplete="off" value="${esc(v ? v.factura : "")}"></label>
         <label>Día *<input name="fecha" type="date" value="${esc(v ? v.fecha : hoyISO())}"></label>
         <label>Nombre *<input name="nombre" maxlength="60" autocomplete="off" value="${esc(v ? v.nombre : "")}"></label>
         <label>Apellido *<input name="apellido" maxlength="60" autocomplete="off" value="${esc(v ? v.apellido : "")}"></label>
+        <label>Cédula *<input name="cedula" maxlength="14" autocomplete="off" placeholder="V-12345678" value="${esc(v && v.cedula ? v.cedula : "")}"></label>
         <label>Monto total en dólares (USD) *<input name="monto_total_usd" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v ? v.monto_total_usd : "", 4))}"></label>
         <label>Tasa BCV de la venta *<input name="tasa" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(tasaSugerida, 4))}"></label>
+        <label>Método de pago de la inicial *<select name="metodo_pago"><option value="">Elige…</option>${opcionesMetodo}</select></label>
       </div>
       <p class="muted small">Inicial ${CASHEA_PCT.inicial}% en caja. Cashea descuenta ${CASHEA_PCT.comision}% servicio + ${CASHEA_PCT.adelanto}% adelanto.</p>
       <div class="cs-calc" id="casheaCalc" aria-live="polite"></div>
@@ -418,8 +486,12 @@ function validarCashea(d, id) {
   if (!d.factura) return "Escribe el número de factura.";
   if (!d.nombre || !d.apellido) return "Escribe el nombre y el apellido.";
   if (!d.fecha) return "Elige el día de la venta.";
+  if (!TIENDAS_CASHEA[d.tienda]) return "Elige la tienda de la venta.";
+  if (!d.cedula) return "Escribe la cédula: la letra V, E, J o G y los números (ej. V-12345678).";
   if (d.monto_total_usd === null || d.monto_total_usd <= 0) return "El monto total en dólares debe ser mayor que cero.";
   if (d.tasa === null || d.tasa <= 0) return "La tasa BCV de la venta debe ser mayor que cero.";
+  if (!METODOS_PAGO_CASHEA.includes(d.metodo_pago)) return "Elige el método de pago de la inicial.";
+  if (mesCerrado(periodoDe(d.fecha))) return `El mes ${periodoDe(d.fecha)} ya está cerrado. Registra la venta con la fecha de un mes abierto.`;
   if (adm.cashea.some(v => v.id !== id && normaTexto(v.factura) === normaTexto(d.factura))) {
     return `Ya existe una venta con la factura ${d.factura}.`;
   }
@@ -435,6 +507,9 @@ async function guardarCashea(e) {
     nombre: String(form.nombre.value || "").trim(),
     apellido: String(form.apellido.value || "").trim(),
     fecha: form.fecha.value,
+    tienda: String(form.tienda.value || ""),
+    cedula: normalizarCedula(form.cedula.value),
+    metodo_pago: String(form.metodo_pago.value || "") || null,
     monto_total_usd: leerMonto(form.monto_total_usd.value, 4),
     tasa: leerMonto(form.tasa.value, 4),
   };
@@ -467,7 +542,7 @@ async function guardarCashea(e) {
     error.textContent = err.code === "23505"
       ? `Ya existe una venta con la factura ${d.factura}.`
       : err.code === "23514"
-        ? "Revisa los datos: el monto y la tasa deben ser mayores que cero."
+        ? "Revisa los datos: el monto, la tasa, la cédula y el método deben ser válidos."
         : "No se guardó: " + (err.message || "error");
     error.hidden = false;
   } finally {
@@ -480,6 +555,7 @@ async function cambiarEstadoCashea(id, estado) {
   const v = adm.cashea.find(x => x.id === id);
   if (!v) return;
   if (estado === "anulada" && !confirm(`¿Anular la venta ${v.factura}? Quedará como anulada y no se borra.`)) return;
+  if (estado === "cobrada" && !confirm(`¿Marcar cobrada la venta ${v.factura}? Después solo podrás verla en Detalle.`)) return;
   try {
     const { error } = await sb.from("cashea_ventas").update({ estado }).eq("id", id);
     if (error) throw error;
@@ -495,7 +571,8 @@ function exportarCashea() {
   const filas = casheaFiltradas();
   if (!filas.length) return toast("No hay ventas con este filtro para exportar.");
   try {
-    const cab = ["Factura", "Día", "Nombre", "Apellido", "Monto total USD", "Tasa BCV venta", "% inicial",
+    const cab = ["Factura", "Día", "Tienda", "Nombre", "Apellido", "Cédula", "Método de pago de la inicial",
+      "Monto total USD", "Tasa BCV venta", "% inicial",
       "Inicial USD", "Inicial Bs", "Financiado USD", "% descuentos", "Descuentos USD",
       "Liquidación esperada USD", "Liquidación esperada Bs (tasa venta)",
       "Fecha del pago", "Tasa BCV del pago", "Recibido Bs", "Descuento real USD", "Diferencia USD (+ descontó de más)",
@@ -504,7 +581,8 @@ function exportarCashea() {
       const c = calculoCashea(v);
       const r = compararCashea(v);
       return [
-        v.factura, fechaTxt(v.fecha), v.nombre, v.apellido,
+        v.factura, fechaTxt(v.fecha), TIENDAS_CASHEA[v.tienda] || v.tienda || "", v.nombre, v.apellido,
+        v.cedula || "", v.metodo_pago || "",
         Number(v.monto_total_usd), Number(v.tasa), Number(v.pct_inicial),
         c.inicialUsd, c.inicialBs, c.financiadoUsd, c.pctDescuento, c.descuentoUsd,
         c.liquidacionUsd, c.liquidacionBsVenta,

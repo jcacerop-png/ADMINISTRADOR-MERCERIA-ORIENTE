@@ -17,6 +17,7 @@ const adm = {
   actividad: [],
   notas: [],
   cashea: [],
+  cierres: [],          // meses cerrados de Cashea (cierre_mensuales)
   chip: "todos",
   q: "",
   form: null,          // producto abierto en el formulario
@@ -139,12 +140,20 @@ function alEntrarTab(tab) {
   if (tab === "analitica" && typeof refrescarAnalitica === "function") refrescarAnalitica();
   if (tab === "carrusel" && typeof refrescarCarrusel === "function") refrescarCarrusel();
   if (tab === "inventario" && typeof pintarInventario === "function") pintarInventario();
-  if (tab === "cashea" && typeof refrescarCashea === "function") refrescarCashea();
+  if (tab.startsWith("cashea") && typeof refrescarCashea === "function") {
+    if (typeof fijarTiendaCashea === "function") fijarTiendaCashea(tab);
+    refrescarCashea();
+  }
+  if (tab === "cierre" && typeof refrescarCashea === "function") refrescarCashea();
 }
+
+// Las cuatro pestañas de Cashea comparten una sola sección (la tienda cambia con la pestaña)
+const VISTA_DE_TAB = { "cashea-decocintas": "cashea", "cashea-merceria": "cashea", "cashea-caracas": "cashea" };
 
 function irA(tab) {
   adm.tab = tab;
-  $$("[data-view]").forEach(v => (v.hidden = v.dataset.view !== tab));
+  const vista = VISTA_DE_TAB[tab] || tab;
+  $$("[data-view]").forEach(v => (v.hidden = v.dataset.view !== vista));
   $$("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   window.scrollTo(0, 0);
   alEntrarTab(tab);

@@ -15,7 +15,7 @@ const COLUMNAS_INVENTARIO = {
   categoria: ["categoria", "tipo"],
   stock: ["stock", "cantidad", "existencias", "unidades"],
   mayor: ["preciomayor", "mayor"],
-  detal: ["preciodetal", "detal", "precio", "preciodeventa", "preciodetalle"],
+  detal: ["pxunidad", "preciodetal", "detal", "precio", "preciodeventa", "preciodetalle"],
 };
 
 const inv = { q: "" };
@@ -83,7 +83,8 @@ function pintarInventario() {
 
 /* ---------- Importar: leer el archivo ---------- */
 // Revisa cada fila y separa: productos nuevos, cambios a productos existentes y filas con error
-function planificarImportacion(matriz) {
+// tipoFijo: categoría elegida en la vista previa cuando el archivo no trae columna de categoría
+function planificarImportacion(matriz, tipoFijo = null) {
   let inicio = -1;
   let columnas = null;
   for (let i = 0; i < Math.min(matriz.length, 15); i++) {
@@ -101,6 +102,7 @@ function planificarImportacion(matriz) {
   }
   if (!columnas) throw new Error("No encontré las columnas Código y Nombre en la primera hoja");
 
+  const tieneCategoria = columnas.categoria !== undefined;
   const existentes = new Map(adm.productos.filter(p => p.codigo).map(p => [p.codigo, p]));
   const categoriasPorNombre = new Map(Object.entries(CATEGORIAS).map(([k, n]) => [claveColumna(n), k]));
   const vistos = new Set();
@@ -113,7 +115,7 @@ function planificarImportacion(matriz) {
     const num = i + 1;
     const leer = campo => (columnas[campo] !== undefined ? fila[columnas[campo]] : "");
     const codigo = String(leer("codigo") ?? "").trim();
-    const nombre = String(leer("nombre") ?? "").trim();
+    const nombre = String(leer("nombre") ?? "").replace(/\s+/g, " ").trim();
     if (!codigo && !nombre) continue; // fila vacía
 
     if (!codigo) { errores.push(`Fila ${num}: falta el código`); continue; }
@@ -121,17 +123,20 @@ function planificarImportacion(matriz) {
     if (vistos.has(codigo)) { errores.push(`Fila ${num}: el código ${codigo} se repite en el archivo`); continue; }
     vistos.add(codigo);
 
-    const categoriaTexto = String(leer("categoria") ?? "").trim();
-    const tipo = categoriasPorNombre.get(claveColumna(categoriaTexto))
-      || (CATEGORIAS[categoriaTexto] ? categoriaTexto : null);
-    if (!tipo) {
-      errores.push(`Fila ${num} (${codigo}): la categoría “${categoriaTexto || "vacía"}” no existe. Créala en Categorías.`);
-      continue;
+    let tipo = tipoFijo;
+    if (tieneCategoria) {
+      const categoriaTexto = String(leer("categoria") ?? "").trim();
+      tipo = categoriasPorNombre.get(claveColumna(categoriaTexto))
+        || (CATEGORIAS[categoriaTexto] ? categoriaTexto : null);
+      if (!tipo) {
+        errores.push(`Fila ${num} (${codigo}): la categoría “${categoriaTexto || "vacía"}” no existe. Créala en Categorías.`);
+        continue;
+      }
     }
 
     const stockTexto = String(leer("stock") ?? "").trim();
-    const stock = stockTexto === "" ? 0 : parseInt(stockTexto, 10);
-    if (!Number.isFinite(stock) || stock < 0) {
+    const stock = stockTexto === "" ? 0 : Number(stockTexto.replace(",", "."));
+    if (!Number.isInteger(stock) || stock < 0) {
       errores.push(`Fila ${num} (${codigo}): las existencias no son válidas`);
       continue;
     }
@@ -149,13 +154,15 @@ function planificarImportacion(matriz) {
       continue;
     }
 
-    const datos = { codigo, nombre: nombre.slice(0, 120), tipo, precio, precio_mayor: precioMayor, stock };
+    // Sin columna de categoría, a los productos que ya existen se les mantiene su categoría actual
     const actual = existentes.get(codigo);
+    const tipoFinal = actual && !tieneCategoria ? (actual.tipo || tipo) : tipo;
+    const datos = { codigo, nombre: nombre.slice(0, 120), tipo: tipoFinal, precio, precio_mayor: precioMayor, stock };
     if (actual) cambios.push({ ...datos, actual });
     else nuevos.push(datos);
   }
 
-  return { nuevos, cambios, errores };
+  return { nuevos, cambios, errores, requiereCategoria: !tieneCategoria, tipoElegido: tipoFijo };
 }
 
 async function importarArchivo(input) {
@@ -169,8 +176,11 @@ async function importarArchivo(input) {
     const libro = XLSX.read(await archivo.arrayBuffer(), { type: "array" });
     const hoja = libro.Sheets[libro.SheetNames[0]];
     if (!hoja) throw new Error("el archivo está vacío");
-    const matriz = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "", blankrows: false });
-    dibujarImportacion(planificarImportacion(matriz));
+    // blankrows: true para que el número de fila del mensaje coincida con la fila del Excel
+    const matriz = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: "", blankrows: true });
+    const plan = planificarImportacion(matriz, null);
+    plan.matriz = matriz;
+    dibujarImportacion(plan);
     abrirModal();
   } catch (err) {
     toast("No se pudo leer el archivo: " + (err.message || "revisa el formato"));
@@ -182,6 +192,10 @@ function dibujarImportacion(plan) {
   const { nuevos, cambios, errores } = plan;
   const total = nuevos.length + cambios.length;
   const conVarias = cambios.filter(c => Array.isArray(c.actual.variantes) && c.actual.variantes.length > 1).length;
+  const falta = plan.requiereCategoria && !plan.tipoElegido;
+  const opcionesCategoria = Object.entries(CATEGORIAS)
+    .map(([k, n]) => `<option value="${esc(k)}" ${k === plan.tipoElegido ? "selected" : ""}>${esc(n)}</option>`)
+    .join("");
 
   $("#modal .sheet").innerHTML = `
   <div class="stack">
@@ -189,7 +203,15 @@ function dibujarImportacion(plan) {
       <h2>Importar inventario</h2>
       <button type="button" class="x" data-cerrar aria-label="Cerrar">✕</button>
     </div>
-    <p class="hint">Los productos se buscan por su código. Los nuevos se crean <b>ocultos</b> (sin publicar) hasta que les pongas fotos y los publiques. A los que ya existen se les actualizan nombre, categoría y precios; las existencias solo cambian si tienen una sola opción o ninguna.</p>
+    <p class="hint">Los productos se buscan por su código. Los nuevos se crean <b>ocultos</b> (sin publicar) hasta que les pongas fotos y los publiques. A los que ya existen se les actualizan nombre y precios; las existencias solo cambian si tienen una sola opción o ninguna.</p>
+
+    ${plan.requiereCategoria ? `
+      <div class="card">
+        <label>Categoría de los productos de este archivo
+          <select id="impCategoria"><option value="">Elige una categoría…</option>${opcionesCategoria}</select>
+        </label>
+        <p class="hint">El archivo no trae columna de categoría. Se aplica a los productos nuevos; a los que ya existen se les mantiene su categoría actual.</p>
+      </div>` : ""}
 
     <div class="kpis">
       ${kpi("Nuevos", nuevos.length)}
@@ -207,15 +229,24 @@ function dibujarImportacion(plan) {
 
     <div class="acciones-sheet">
       <button type="button" class="btn ghost" data-cerrar>Cancelar</button>
-      <button type="button" class="btn" id="btnConfirmarImport" ${total ? "" : "disabled"}>Importar ${total} producto(s)</button>
+      <button type="button" class="btn" id="btnConfirmarImport" ${total && !falta ? "" : "disabled"}>Importar ${total} producto(s)</button>
     </div>
   </div>`;
+}
+
+// Vuelve a planificar con la categoría elegida en la vista previa
+function cambiarCategoriaImportacion(valor) {
+  if (!importacionPendiente || !importacionPendiente.matriz) return;
+  const plan = planificarImportacion(importacionPendiente.matriz, valor || null);
+  plan.matriz = importacionPendiente.matriz;
+  dibujarImportacion(plan);
 }
 
 // Guarda el plan revisado: primero los nuevos, luego los cambios
 async function confirmarImportacion() {
   const plan = importacionPendiente;
   if (!plan) return;
+  if (plan.requiereCategoria && !plan.tipoElegido) return toast("Elige una categoría para los productos nuevos");
   const btn = $("#btnConfirmarImport");
   if (btn) btn.disabled = true;
 
@@ -284,6 +315,7 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", (e) => {
   if (e.target.id === "invIn") importarArchivo(e.target);
+  if (e.target.id === "impCategoria") cambiarCategoriaImportacion(e.target.value);
 });
 
 document.addEventListener("click", (e) => {

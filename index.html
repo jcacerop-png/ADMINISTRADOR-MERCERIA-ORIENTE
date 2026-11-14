@@ -64,7 +64,16 @@
         </button>
         <button data-tab="cashea">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v.01M18 14.5v.01"/></svg>
-          <span>Cashea</span>
+          <span>Cashea total</span>
+        </button>
+        <button data-tab="cashea-decocintas" class="sub">
+          <span>Cashea DECOCINTAS</span>
+        </button>
+        <button data-tab="cashea-merceria" class="sub">
+          <span>Cashea Mercería de Oriente</span>
+        </button>
+        <button data-tab="cashea-caracas" class="sub">
+          <span>Cashea Caracas</span>
         </button>
         <button data-tab="carrusel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
@@ -77,6 +86,10 @@
         <button data-tab="notas">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l2 2 4-4M8 16h8"/></svg>
           <span>Notas</span>
+        </button>
+        <button data-tab="cierre">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+          <span>Cierre de mes</span>
         </button>
       </nav>
       <div class="acciones">
@@ -172,10 +185,16 @@
 
       <!-- CASHEA -->
       <section data-view="cashea" hidden>
+        <nav class="subtabs" aria-label="Cashea por tienda">
+          <button type="button" data-tab="cashea">Total</button>
+          <button type="button" data-tab="cashea-decocintas">DECOCINTAS</button>
+          <button type="button" data-tab="cashea-merceria">Mercería de Oriente</button>
+          <button type="button" data-tab="cashea-caracas">Caracas</button>
+        </nav>
         <div class="cashea-cabecera">
           <div>
             <span class="eyebrow">Cashea</span>
-            <h1>Ventas por Cashea</h1>
+            <h1 id="casheaTitulo">Cashea total</h1>
             <p class="hint" style="margin:4px 0 0">Registra cada venta en dólares. La inicial (40%) se cobra en caja y Cashea paga el resto menos sus descuentos (8%). Cuando llegue su pago, compruébalo aquí.</p>
           </div>
           <button class="btn" data-cashea="nueva">+ Nueva venta</button>
@@ -265,6 +284,29 @@
         </div>
       </section>
 
+      <!-- CIERRE DE MES (Cashea por caja) -->
+      <section data-view="cierre" hidden>
+        <div class="cashea-cabecera">
+          <div>
+            <span class="eyebrow">Cashea</span>
+            <h1>Cierre de mes</h1>
+            <p class="hint" style="margin:4px 0 0">Totales por caja del mes. Cada mes se cierra a las 11:59 p. m. del último día (hora de Caracas) o cuando lo cierres aquí. Al cerrarlo se guarda su resumen y sus ventas ya no admiten cambios de datos.</p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label class="cierre-periodo">Mes
+            <select id="cierrePeriodo" aria-label="Mes del cierre"></select>
+          </label>
+          <button class="btn" type="button" data-cierre="exportar">Exportar ventas mensuales por caja</button>
+          <button class="btn ghost" type="button" data-cierre="cerrar" id="btnCerrarMes" hidden>Cerrar mes</button>
+        </div>
+        <div class="card" id="cierreEstado"></div>
+        <div id="cierrePendientes"></div>
+        <h2 class="sub-titulo">Ventas por caja</h2>
+        <div class="card" id="cierreCajas"></div>
+        <h2 class="sub-titulo">Meses cerrados</h2>
+        <div class="card" id="cierreArchivo"></div>
+      </section>
     </main>
 
     <!-- Barra inferior con iconos (se ve solo en el celular) -->
@@ -301,6 +343,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l2 2 4-4M8 16h8"/></svg>
         <span>Notas</span>
       </button>
+      <button data-tab="cierre">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        <span>Cierre</span>
+      </button>
     </nav>
   </div>
 
@@ -311,6 +357,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <!-- Lógica -->
   <script src="config.js"></script>
   <script src="comun.js"></script>
@@ -318,6 +365,7 @@
   <script src="categorias.js"></script>
   <script src="inventario.js"></script>
   <script src="cashea.js"></script>
+  <script src="cierre.js"></script>
   <script src="analitica.js"></script>
   <script src="venta.js"></script>
   <script src="carrusel.js"></script>

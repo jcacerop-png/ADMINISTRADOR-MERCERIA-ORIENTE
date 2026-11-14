@@ -1,51 +1,67 @@
-MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 10)
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 11)
 
 Archivos de esta carpeta:
-  Administracion.html       Panel (menú lateral con íconos: Inicio, Venta, Catálogo, Inventario, Cashea, Carrusel, Analítica, Notas)
+  Administracion.html       Panel (menú: Inicio, Venta, Catálogo, Inventario, Cashea total,
+                            Cashea DECOCINTAS, Cashea Mercería de Oriente, Cashea Caracas,
+                            Carrusel, Analítica, Notas, Cierre de mes)
   admin.js                  Lógica general del panel (login, catálogo, plantillas, notas)
-  categorias.js             Categorías: crear, renombrar, ocultar, ordenar y borrar
-  inventario.js             Inventario: lista, buscador e importación desde Excel o CSV
-  cashea.js                 Ventas por Cashea Express: registrar, comprobar el pago, detalle, cobrar, anular y exportar
+  inventario.js             Inventario: lista, buscador e importación desde Excel (formato de tu archivo)
+  cashea.js                 Ventas por Cashea: registrar, comprobar el pago, detalle, cobrar, anular y exportar
+  cierre.js                 Cierre de mes: totales por caja, cierre manual y Excel contable (NUEVO)
   venta.js                  Venta rápida
   analitica.js              Analítica y Excel del periodo
   carrusel.js               Fotos del carrusel (fondo de la entrada del catálogo)
+  categorias.js             Categorías: crear, renombrar, ocultar, ordenar y borrar
   comun.js                  Compartido (funciones comunes y orden por arrastre)
   config.js                 Tus datos de Supabase (ya incluidos: no lo cambies)
   styles.css                Diseño (negro y amarillo, tema claro y oscuro)
   logo.png                  Logo
-  supabase-merceria-v4.sql  Actualización 4 (ya ejecutada)
-  supabase-merceria-v5.sql  Actualización 5: Cashea (ya ejecutada)
-  supabase-merceria-v6.sql  Actualización 6: Cashea en dólares (ya ejecutada)
-  supabase-merceria-v7.sql  Actualización 7: cuotas (ya ejecutada; sus datos se quitan con la v8)
-  supabase-merceria-v8.sql  Actualización 8: Cashea Express (inicial 40%, descuentos 8%, comprobación del pago)
+  supabase-merceria-v9.sql  Actualización 9: tiendas de Cashea, cédula, método de pago y cierre de mes
 
-Pasos para esta actualización (versión 10):
-1. Base de datos: en Supabase, abre SQL Editor, pega el contenido de supabase-merceria-v8.sql y dale Run.
-   Es seguro correrlo más de una vez y no borra ventas.
-   Esta actualización QUITA las cuotas, el porcentaje variable y las cuotas pagadas de la versión 7.
-   Si tenías ventas con esos datos, sus cuotas se pierden; el monto total y la tasa se conservan.
-   Cada venta queda con inicial 40% y descuentos 4% + 4%.
-2. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
-   Administracion.html, admin.js, cashea.js, styles.css y comun.js.
-   Los demás archivos no cambiaron: no hace falta subirlos otra vez.
-   NO subas config.js si ya lo tienes: conserva el tuyo.
-3. Súbelo al mismo lugar donde está el panel (GitHub o Netlify).
+Pasos para esta actualización (versión 11):
+1. Base de datos: en Supabase, abre SQL Editor, pega el contenido de supabase-merceria-v9.sql y dale Run.
+   Debe correrse después de la v8. Es seguro correrlo más de una vez y no borra ventas.
+   Las ventas que ya existían quedan como "Mercería de Oriente" y sin cédula ni método de pago.
+2. Cierre automático (recomendado): en Supabase ve a Database → Extensions, activa "pg_cron"
+   y vuelve a dar Run a la v9. Sin pg_cron, el cierre queda solo a mano (botón "Cerrar mes").
+   El panel te avisa cuando hay meses terminados sin cerrar.
+3. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
+   Administracion.html, admin.js, cashea.js, inventario.js y styles.css.
+   Sube también cierre.js, que es nuevo.
+   Los demás archivos no cambiaron. NO subas config.js: conserva el tuyo.
+4. Súbelo al mismo lugar donde está el panel (GitHub o Netlify).
 
-Cómo funciona Cashea Express en el panel:
-- Inicial 40%: la clienta la paga en caja en bolívares, a la tasa BCV de la venta.
-- Financiado: el resto (60%). Lo debe Cashea al comercio.
-- Cashea descuenta 8% del monto total: 4% por servicio tecnológico y 4% por adelanto.
-- Liquidación esperada (USD) = financiado − 8%. Esto es lo que debe llegar en la liquidación.
-- Comprobar (botón en cada venta): cuando llegue el pago de Cashea, escribe los bolívares que llegaron,
-  la tasa BCV de ese día y la fecha. El panel calcula:
-    · lo esperado a la tasa de la venta,
-    · la diferencia por variación de la tasa BCV,
-    · el descuento real que se llevó Cashea (y su porcentaje),
-    · si Cashea descontó de más, de menos o cuadra (tolerancia de 50 centavos de dólar).
-- En la lista verás la columna "Pago de Cashea" con la etiqueta de cada venta.
-- "Por cobrar a Cashea" suma la liquidación esperada de las ventas pendientes que aún no se comprobaron.
-- Las ventas no se borran: se anulan. Cada cambio y cada comprobación queda en Actividad con la cuenta que lo hizo.
-- Los porcentajes de cada venta se guardan con la venta: si después cambian las reglas, las ventas viejas no se mueven.
-- Solo el panel la ve. Nunca aparece en el catálogo público.
+Importar inventario (Excel):
+- El archivo debe tener los encabezados en la fila 2 (la fila 1 se ignora).
+- CÓDIGO → código · PRODUCTO → nombre · CANTIDAD → existencias · P X UNIDAD $ → precio detal · PRECIO MAYOR → precio mayor.
+- PRESENTACIÓN, MATERIAL y METROS se ignoran.
+- Si el archivo no trae categoría, eliges una en la vista previa. Se aplica a los productos nuevos;
+  los que ya existen mantienen su categoría.
+- Los productos nuevos se crean ocultos hasta que les pongas fotos y los publiques.
+- Las filas sin precio o con un código repetido aparecen como error y no se importan.
+
+Cashea (ventas):
+- Cada venta pertenece a una tienda: DECOCINTAS, Mercería de Oriente o Caracas.
+  "Cashea total" muestra las tres y te deja elegir la tienda; cada sección de tienda ya la trae fija.
+- Cada venta nueva pide cédula (V, E, J o G seguido de los números) y el método de pago de la inicial:
+  Efectivo USD, Efectivo Bs, Pago móvil, Transferencia, Punto de venta, Zelle u Otro.
+- Inicial 40% en caja, en bolívares a la tasa BCV de la venta. Cashea financia el 60% y descuenta
+  8% (4% servicio tecnológico + 4% adelanto). Liquidación esperada = financiado − 8%.
+- Mientras una venta está pendiente puedes Comprobar el pago, Marcar cobrada, Editar o Anular.
+- Una venta cobrada o anulada solo muestra Detalle. Por eso, comprueba el pago antes de marcarla cobrada.
+- Editar no aparece en los meses cerrados.
+
+Cierre de mes:
+- Elige el mes y verás los totales de cada caja: ventas, anuladas, total, inicial, descuentos y liquidación.
+- Exportar ventas mensuales por caja: un Excel con la hoja Resumen y una hoja por caja. Cada hoja trae
+  Nº, fecha, factura, nombre, apellido, cédula, monto total, tasa, método de pago, inicial, financiado,
+  descuentos, liquidación, estado, pago de Cashea, resultado de la comprobación y detalles.
+  Encabezados azul marino, bordes y totales. Las anuladas salen, pero no suman en los totales.
+  El formato usa la librería ExcelJS desde jsDelivr; si no carga, sale una versión simple.
+- Cerrar mes (botón): guarda el resumen del mes. Después, sus ventas ya no admiten cambios de datos:
+  solo se pueden cobrar, anular y comprobar. No se pueden crear ventas con fecha de un mes cerrado.
+- Cierre automático: todos los días a las 11:59 p. m. (hora de Caracas) se revisa si es el último día
+  del mes; si lo es, cierra el mes. Si ya lo cerraste a mano, no hace nada: el manual tiene prioridad.
+- "Cerrar meses vencidos" aparece cuando hay meses terminados sin cerrar. Lo cierra solo al pulsarlo.
 
 Nunca pongas la clave "service_role" en ningún archivo.
