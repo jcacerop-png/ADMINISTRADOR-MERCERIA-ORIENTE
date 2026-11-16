@@ -781,3 +781,55 @@ body.panel .lateral .tabs button.sub { padding-left: 40px; font-size: 14px; }
 @media (min-width: 1100px) {
   body.panel .grid-adm { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 }
+
+/* ===== v12 · Calculadora de venta y fotos masivas ===== */
+body.panel .calc-titulo { margin: 4px 0 16px; text-align: center; font-size: 22px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+body.panel .calc-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+@media (min-width: 900px) { body.panel .calc-grid { grid-template-columns: 1fr 1fr; } }
+body.panel .calc-col { display: grid; gap: 14px; }
+body.panel .calc-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--sombra); }
+body.panel .calc-card h3 { margin: 0 0 14px; text-align: center; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+body.panel .calc-filas { display: grid; gap: 10px; }
+body.panel .calc-fila { display: flex; gap: 8px; align-items: center; }
+body.panel .calc-fila .calc-precio { flex: 1; min-width: 0; border-radius: 12px; }
+body.panel .calc-quitar { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+body.panel .calc-quitar:hover { color: var(--malo); border-color: var(--malo); }
+body.panel .calc-mas { width: 100%; margin-top: 12px; }
+body.panel .calc-linea { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; }
+body.panel .calc-linea strong { color: var(--ink); }
+body.panel #calcIvaBtn.on { background: var(--btn); color: var(--btn-ink); }
+body.panel .calc-total { margin-top: 14px; padding: 16px; border-radius: 16px; border: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+body.panel .calc-total span { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+body.panel .calc-total strong { font-size: 24px; color: var(--ink); }
+body.panel .calc-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+body.panel .calc-dos label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+body.panel .calc-tasa { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+body.panel .calc-tasa .input { flex: 1; min-width: 0; }
+body.panel .calc-sync { width: 40px; padding: 0; font-size: 18px; line-height: 1; }
+body.panel .calc-montos { margin-top: 14px; }
+body.panel .calc-mini { border: 1px solid var(--line); border-radius: 14px; padding: 12px; text-align: center; }
+body.panel .calc-mini span { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+body.panel .calc-mini strong { display: block; margin-top: 6px; font-size: 20px; color: var(--ink); overflow-wrap: anywhere; }
+body.panel .calc-nota { text-align: center; margin: 12px 0 0; }
+body.panel .calc-aplicar { width: 100%; padding: 14px; font-weight: 700; letter-spacing: .04em; }
+body.panel .calc-acciones { display: grid; gap: 8px; }
+body.panel .calc-acciones .btn { width: 100%; }
+body.panel #calcAplicado { margin: 0; text-align: center; }
+body.panel .fotos-ayuda { margin-bottom: 12px; display: grid; gap: 6px; }
+body.panel .fotos-detalle { margin-top: 10px; }
+body.panel .fotos-detalle summary { cursor: pointer; color: var(--ink); }
+body.panel #fotosResumen .kpis { margin-top: 10px; }
+
+/* ===== v14 · Foto de la factura (calculadora, formulario y detalle de Cashea) ===== */
+body.panel .factura-campo { display: grid; gap: 8px; margin-top: 12px; }
+body.panel .factura-titulo { font-size: 13px; color: var(--muted); }
+body.panel .factura-botones { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
+body.panel .foto-factura { display: block; width: 100%; max-height: 360px; object-fit: contain; border-radius: 14px; border: 1px solid var(--line); background: var(--foto); }
+body.panel .det-factura { display: grid; gap: 8px; margin-top: 14px; }
+body.panel .calc-foto-vista { display: grid; gap: 8px; margin-top: 10px; }
+
+/* ===== v15 · Foto de la factura con el mismo marco del catálogo ===== */
+body.panel .factura-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+body.panel .factura-cab h3 { margin: 0; text-align: left; }
+body.panel .foto-factura-marco { width: 100%; max-width: 260px; aspect-ratio: 4 / 3; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+body.panel .foto-factura-marco img { width: 100%; height: 100%; object-fit: cover; display: block; }

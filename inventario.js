@@ -1,12 +1,11 @@
 "use strict";
 /* =========================================================
-   Inventario: lista de productos con sus existencias, buscador
-   en tiempo real (código, nombre o categoría) e importación desde
-   Excel o CSV con vista previa antes de guardar.
-   Columnas del archivo: Código, Nombre, Categoría, Stock (o
-   Cantidad), Precio Mayor y Precio Detal. Si el archivo trae un
-   solo "Precio", se toma como precio detal.
-   Requiere config.js, comun.js, admin.js y la librería XLSX.
+   Importación de inventario desde Excel o CSV, con vista previa
+   antes de guardar. La lista de inventario se quitó: ahora todo
+   vive en Catálogo. Columnas del archivo: CÓDIGO, PRODUCTO,
+   CANTIDAD, P X UNIDAD $ (precio detal), PRECIO MAYOR y, opcional,
+   USOS y DESCRIPCIÓN. Los usos se separan por punto y coma o salto
+   de línea. Requiere config.js, comun.js, admin.js y la librería XLSX.
    ========================================================= */
 
 const COLUMNAS_INVENTARIO = {
@@ -16,9 +15,10 @@ const COLUMNAS_INVENTARIO = {
   stock: ["stock", "cantidad", "existencias", "unidades"],
   mayor: ["preciomayor", "mayor"],
   detal: ["pxunidad", "preciodetal", "detal", "precio", "preciodeventa", "preciodetalle"],
+  usos: ["usos", "uso"],
+  descripcion: ["descripcion", "descripciondelproducto", "detalles", "detalle"],
 };
 
-const inv = { q: "" };
 let importacionPendiente = null;
 
 const claveColumna = s => normaTexto(s).replace(/[^a-z0-9]/g, "");
@@ -27,59 +27,6 @@ const enTrozos = (lista, n) => {
   for (let i = 0; i < lista.length; i += n) salida.push(lista.slice(i, i + n));
   return salida;
 };
-
-/* ---------- Lista ---------- */
-function listaInventario() {
-  const q = normaTexto(inv.q);
-  return [...adm.productos]
-    .filter(p => !q || normaTexto(`${p.codigo || ""} ${p.nombre || ""} ${CATEGORIAS[p.tipo] || ""}`).includes(q))
-    .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
-}
-
-function pintarInventario() {
-  const total = adm.productos.length;
-  const unidades = adm.productos.reduce((a, p) => a + stockDe(p), 0);
-  const sinStock = adm.productos.filter(p => stockDe(p) <= 0).length;
-  $("#invResumen").textContent = `${total} producto(s) · ${unidades} unidad(es) en total · ${sinStock} sin existencias`;
-
-  const lista = listaInventario();
-  if (!lista.length) {
-    $("#invTabla").innerHTML = `<p class="muted">${total
-      ? "Ningún producto coincide con la búsqueda."
-      : "Aún no hay productos. Importa un archivo o crea uno desde Catálogo."}</p>`;
-    return;
-  }
-
-  $("#invTabla").innerHTML = `
-    <table class="tabla-inv">
-      <thead>
-        <tr>
-          <th>Código</th><th>Producto</th><th>Categoría</th><th>Existencias</th>
-          <th>Por variante</th><th>Precio detal</th><th>Precio mayor</th><th>Publicado</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${lista.map(p => {
-          const s = stockDe(p);
-          const estado = s <= 0 ? "sin" : s <= 2 ? "bajo" : "ok";
-          const txt = s <= 0 ? "Sin existencias" : s <= 2 ? "Poca" : "Bien";
-          const porVariante = (Array.isArray(p.variantes) ? p.variantes : [])
-            .map(v => `${esc(v.nombre)}: ${Number(v.stock) || 0}`).join(" · ");
-          return `
-          <tr class="${p.activo ? "" : "oculto"}">
-            <td>${p.codigo ? esc(p.codigo) : `<span class="muted">—</span>`}</td>
-            <td><b>${esc(p.nombre)}</b></td>
-            <td>${esc(CATEGORIAS[p.tipo] || "")}</td>
-            <td><span class="pill-stock ${estado}">${s} ud. · ${txt}</span></td>
-            <td class="small">${porVariante || "—"}</td>
-            <td>${usd(p.precio)}</td>
-            <td>${p.precio_mayor != null ? usd(p.precio_mayor) : `<span class="muted">—</span>`}</td>
-            <td>${p.activo ? "Sí" : "No"}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>`;
-}
 
 /* ---------- Importar: leer el archivo ---------- */
 // Revisa cada fila y separa: productos nuevos, cambios a productos existentes y filas con error
@@ -147,6 +94,10 @@ function planificarImportacion(matriz, tipoFijo = null) {
       continue;
     }
 
+    const usosTexto = String(leer("usos") ?? "").trim();
+    const usos = usosTexto ? usosTexto.split(/\r?\n|;/).map(u => u.trim()).filter(Boolean).slice(0, 12) : [];
+    const descripcion = String(leer("descripcion") ?? "").replace(/\s+/g, " ").trim().slice(0, 1000);
+
     const mayorTexto = String(leer("mayor") ?? "").trim();
     const precioMayor = mayorTexto === "" ? null : leerPrecio(mayorTexto);
     if (mayorTexto !== "" && precioMayor === null) {
@@ -157,12 +108,18 @@ function planificarImportacion(matriz, tipoFijo = null) {
     // Sin columna de categoría, a los productos que ya existen se les mantiene su categoría actual
     const actual = existentes.get(codigo);
     const tipoFinal = actual && !tieneCategoria ? (actual.tipo || tipo) : tipo;
-    const datos = { codigo, nombre: nombre.slice(0, 120), tipo: tipoFinal, precio, precio_mayor: precioMayor, stock };
+    const datos = { codigo, nombre: nombre.slice(0, 120), tipo: tipoFinal, precio, precio_mayor: precioMayor, stock, usos, descripcion };
     if (actual) cambios.push({ ...datos, actual });
     else nuevos.push(datos);
   }
 
-  return { nuevos, cambios, errores, requiereCategoria: !tieneCategoria, tipoElegido: tipoFijo };
+  return {
+    nuevos, cambios, errores,
+    requiereCategoria: !tieneCategoria,
+    tipoElegido: tipoFijo,
+    tieneUsos: columnas.usos !== undefined,
+    tieneDescripcion: columnas.descripcion !== undefined,
+  };
 }
 
 async function importarArchivo(input) {
@@ -203,7 +160,7 @@ function dibujarImportacion(plan) {
       <h2>Importar inventario</h2>
       <button type="button" class="x" data-cerrar aria-label="Cerrar">✕</button>
     </div>
-    <p class="hint">Los productos se buscan por su código. Los nuevos se crean <b>ocultos</b> (sin publicar) hasta que les pongas fotos y los publiques. A los que ya existen se les actualizan nombre y precios; las existencias solo cambian si tienen una sola opción o ninguna.</p>
+    <p class="hint">Los productos se buscan por su código. Los nuevos se crean <b>ocultos</b> (sin publicar) y se publican solos al subir su foto (Catálogo → Subir fotos). A los que ya existen se les actualizan nombre y precios; las existencias solo cambian si tienen una sola opción o ninguna.</p>
 
     ${plan.requiereCategoria ? `
       <div class="card">
@@ -256,7 +213,7 @@ async function confirmarImportacion() {
       codigo: n.codigo,
       nombre: n.nombre,
       tipo: n.tipo,
-      descripcion: "",
+      descripcion: n.descripcion || "",
       precio: n.precio,
       precio_mayor: n.precio_mayor,
       costo: 0,
@@ -265,7 +222,7 @@ async function confirmarImportacion() {
       fotos: [],
       caracteristicas: [],
       accesorios: [],
-      usos: [],
+      usos: n.usos || [],
       documentos: [],
       variantes: [{ nombre: "Única", stock: n.stock }],
       actualizado_en: ahora,
@@ -284,6 +241,9 @@ async function confirmarImportacion() {
           precio_mayor: c.precio_mayor,
           actualizado_en: ahora,
         };
+        // Solo se cambian si el archivo trae el dato; si la celda está vacía se conserva lo que ya hay
+        if (c.usos.length) cambio.usos = c.usos;
+        if (c.descripcion) cambio.descripcion = c.descripcion;
         const vars = Array.isArray(c.actual.variantes) ? c.actual.variantes : [];
         if (vars.length === 0) cambio.variantes = [{ nombre: "Única", stock: c.stock }];
         else if (vars.length === 1) cambio.variantes = [{ ...vars[0], stock: c.stock }];
@@ -307,12 +267,6 @@ async function confirmarImportacion() {
 }
 
 /* ---------- Eventos ---------- */
-document.addEventListener("input", (e) => {
-  if (e.target.id !== "buscarInv") return;
-  inv.q = e.target.value;
-  pintarInventario();
-});
-
 document.addEventListener("change", (e) => {
   if (e.target.id === "invIn") importarArchivo(e.target);
   if (e.target.id === "impCategoria") cambiarCategoriaImportacion(e.target.value);

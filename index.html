@@ -50,17 +50,13 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
           <span>Inicio</span>
         </button>
-        <button data-tab="venta">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
-          <span>Venta rápida</span>
+        <button data-tab="calculadora">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h1.5M12.5 12h1.5M8 16h1.5M12.5 16h1.5"/></svg>
+          <span>Calculadora de venta</span>
         </button>
         <button data-tab="catalogo">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           <span>Catálogo</span>
-        </button>
-        <button data-tab="inventario">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="2.5" cy="6" r=".6"/><circle cx="2.5" cy="12" r=".6"/><circle cx="2.5" cy="18" r=".6"/></svg>
-          <span>Inventario</span>
         </button>
         <button data-tab="cashea">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v.01M18 14.5v.01"/></svg>
@@ -78,10 +74,6 @@
         <button data-tab="carrusel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
           <span>Carrusel</span>
-        </button>
-        <button data-tab="analitica">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M2 20h20"/></svg>
-          <span>Analítica</span>
         </button>
         <button data-tab="notas">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l2 2 4-4M8 16h8"/></svg>
@@ -117,70 +109,90 @@
           </div>
         </div>
       </section>
-
-      <!-- VENTA RÁPIDA -->
-      <section data-view="venta" class="view" hidden>
-        <div class="venta-grid">
-          <div class="card">
-            <h3>Buscar prenda</h3>
-            <input id="buscarVenta" class="input" placeholder="Escribe el nombre o la categoría…" autocomplete="off" style="margin-top:10px">
-            <div id="resVenta" class="pick-grid"></div>
-            <div id="selVenta"></div>
+      <!-- CALCULADORA DE VENTA -->
+      <section data-view="calculadora" class="view" hidden>
+        <h2 class="calc-titulo">Calculadora de venta</h2>
+        <div class="calc-grid">
+          <div class="calc-card">
+            <h3>Sumatoria de productos</h3>
+            <div class="calc-filas" id="calcFilas"></div>
+            <button type="button" class="btn ghost sm calc-mas" data-calc="mas">+ Agregar precio</button>
+            <div class="calc-linea"><span>Resultado de la suma</span><strong id="calcSuma">$0.00</strong></div>
+            <div class="calc-linea"><span>IVA (16%)</span><strong id="calcIvaMonto">$0.00</strong></div>
+            <div class="calc-total"><span>Monto total</span><strong id="calcTotal">$0.00</strong></div>
           </div>
 
-          <div class="card">
-            <h3>Venta actual</h3>
-            <ul id="lineasVenta" class="lista" style="margin-top:10px"></ul>
-            <div class="total-venta"><span>Total</span><strong id="totalVenta">$0.00</strong></div>
-            <label>Método de pago
-              <select id="metodoVenta">
-                <option value="Efectivo">Efectivo</option>
-                <option value="Zelle">Zelle</option>
-                <option value="Pago móvil">Pago móvil</option>
-                <option value="Punto de venta">Punto de venta</option>
-                <option value="Otro">Otro</option>
-              </select>
-            </label>
-            <label style="margin-top:10px">Nota (opcional)
-              <input id="notaVenta" maxlength="300" autocomplete="off">
-            </label>
-            <button class="btn" id="btnCobrar" disabled style="width:100%;margin-top:14px">Confirmar venta</button>
-            <button class="btn ghost" id="btnVaciar" style="width:100%;margin-top:8px">Vaciar</button>
-          </div>
-        </div>
+          <div class="calc-col">
+            <div class="calc-card">
+              <h3>Configuración de venta</h3>
+              <div class="calc-dos">
+                <label>Seleccionar tienda
+                  <select class="input" id="calcTienda">
+                    <option value="decocintas">DECOCINTAS</option>
+                    <option value="merceria">Mercería de Oriente</option>
+                    <option value="caracas">Caracas</option>
+                  </select>
+                </label>
+                <label>Fecha de venta
+                  <input class="input" type="date" id="calcFecha">
+                </label>
+              </div>
+              <label>Método de pago de la inicial
+                <select class="input" id="calcMetodo"></select>
+              </label>
+            </div>
 
-        <div class="card" style="margin-top:16px">
-          <div class="card-head">
-            <h3>Ventas de hoy</h3>
-            <strong id="totalHoy"></strong>
+            <div class="calc-card">
+              <h3>Conversión de divisa</h3>
+              <label>Tasa de cambio (1 USD = XX Bs)
+                <span class="calc-tasa">
+                  <input class="input" id="calcTasa" inputmode="decimal" autocomplete="off" placeholder="0,00">
+                  <button type="button" class="btn ghost sm calc-sync" data-calc="sync" aria-label="Tomar la tasa de la última venta Cashea" title="Tomar la tasa de la última venta Cashea">⟳</button>
+                </span>
+              </label>
+              <div class="calc-dos calc-montos">
+                <div class="calc-mini"><span>Monto total en USD</span><strong id="calcUsd">$0.00</strong></div>
+                <div class="calc-mini"><span>Monto total en Bs</span><strong id="calcBs">Bs —</strong></div>
+              </div>
+              <p class="muted small calc-nota">Monto total calculado automáticamente en base al total de productos.</p>
+            </div>
+
+            <div class="calc-card">
+              <div class="factura-cab">
+                <h3>Foto de la factura</h3>
+                <label class="btn sm" style="cursor:pointer">+ Subir foto<input type="file" id="calcFotoSubir" accept="image/*" class="sr"></label>
+              </div>
+              <div class="calc-foto-vista" id="calcFotoVista"></div>
+            </div>
+
+            <button type="button" class="btn calc-aplicar" data-calc="aplicar">✔ APLICAR TASA Y TIENDA</button>
+            <p class="muted small" id="calcAplicado"></p>
+            <div class="calc-acciones">
+              <button type="button" class="btn ghost" data-calc="limpiar">LIMPIAR CALCULADORA</button>
+              
+            </div>
           </div>
-          <ul class="lista" id="ventasHoy" style="margin-top:10px"></ul>
         </div>
       </section>
-
-      <!-- CATÁLOGO -->
+      <!-- CATÁLOGO: productos, Excel y fotos -->
       <section data-view="catalogo" hidden>
         <div class="toolbar">
           <input id="buscarAdm" class="input" placeholder="Buscar producto…" autocomplete="off">
+          <label class="btn ghost sm" style="cursor:pointer">+ Importar Excel<input type="file" id="invIn" accept=".xlsx,.xls,.csv" class="sr"></label>
+          <label class="btn ghost sm" style="cursor:pointer">Subir fotos (masivo)<input type="file" id="fotosMasivas" accept="image/*,.zip" multiple class="sr"></label>
           <button class="btn ghost sm" data-action="exportar">Exportar inventario</button>
           <button class="btn ghost sm" data-action="categorias">Categorías</button>
           <button class="btn ghost sm" data-action="plantillas">Editar plantillas</button>
           <button class="btn" data-action="nuevo">+ Nuevo producto</button>
         </div>
+        <div class="card fotos-ayuda">
+          <p class="hint"><b>Importar Excel:</b> columnas CÓDIGO, PRODUCTO, CANTIDAD, P X UNIDAD $, PRECIO MAYOR y, opcionales, USOS y DESCRIPCIÓN (los usos se separan con punto y coma). Los productos nuevos se crean ocultos hasta que tengan foto.</p>
+          <p class="hint"><b>Subir fotos (masivo):</b> elige todas las fotos juntas o un archivo .zip. Cada foto debe llamarse igual que el <b>código</b> del producto (ej. ACC-M-037.png; las / se cambian por -). Al subirla, el producto se publica solo.</p>
+          <p class="muted small" id="fotosEstado"></p>
+          <div id="fotosResumen"></div>
+        </div>
         <div class="chips" id="chipsAdm"></div>
         <div class="grid-adm" id="gridAdm"></div>
-      </section>
-
-      <!-- INVENTARIO -->
-      <section data-view="inventario" hidden>
-        <div class="toolbar">
-          <input id="buscarInv" class="input" type="search" placeholder="Busca por código, nombre o categoría…" autocomplete="off" aria-label="Buscar en el inventario">
-          <button class="btn ghost sm" data-action="exportar">Exportar Excel</button>
-          <label class="btn sm" style="cursor:pointer">+ Importar archivo<input type="file" id="invIn" accept=".xlsx,.xls,.csv" class="sr"></label>
-        </div>
-        <p class="muted small" id="invResumen"></p>
-        <div class="card tabla-wrap" id="invTabla"></div>
-        <p class="hint" style="margin-top:10px">Importar: el archivo debe tener las columnas Código, Nombre, Categoría, Stock (o Cantidad), Precio Mayor y Precio Detal. Antes de guardar verás una vista previa.</p>
       </section>
 
       <!-- CASHEA -->
@@ -214,6 +226,7 @@
         <div class="card" id="casheaTabla"></div>
       </section>
 
+      <!-- NOTAS -->
       <!-- CARRUSEL -->
       <section data-view="carrusel" class="view" hidden>
         <div class="card">
@@ -231,47 +244,6 @@
         </div>
       </section>
 
-      <!-- ANALÍTICA -->
-      <section data-view="analitica" class="view" hidden>
-        <div class="toolbar">
-          <div class="seg" id="segModo">
-            <button data-modo="dia" class="on">Día</button>
-            <button data-modo="semana">Semana</button>
-            <button data-modo="mes">Mes</button>
-            <button data-modo="anio">Año</button>
-          </div>
-          <div class="zoom-nav">
-            <button class="btn ghost sm" id="pAtras" aria-label="Periodo anterior">◀</button>
-            <span id="periodoTxt"></span>
-            <button class="btn ghost sm" id="pAdel" aria-label="Periodo siguiente">▶</button>
-            <button class="btn ghost sm" id="zOut" aria-label="Ver más periodos" title="Ver más periodos">−</button>
-            <button class="btn ghost sm" id="zIn" aria-label="Ver menos periodos" title="Ver menos periodos">+</button>
-          </div>
-          <button class="btn" id="btnExcel">Descargar Excel del periodo</button>
-        </div>
-
-        <div class="kpis" id="kpisVenta"></div>
-
-        <div class="card">
-          <div class="chart-wrap"><canvas id="grafico"></canvas></div>
-          <p class="muted small" id="graficoVacio"></p>
-        </div>
-
-        <div class="rank-grid" id="rankings" style="margin-top:16px"></div>
-
-        <div class="grid-2" style="margin-top:16px">
-          <div class="card">
-            <h3>Ventas del periodo</h3>
-            <ul class="lista" id="ventasPeriodo" style="margin-top:10px"></ul>
-          </div>
-          <div class="card">
-            <h3>Métodos de pago</h3>
-            <ul class="lista" id="metodosPago" style="margin-top:10px"></ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- NOTAS -->
       <section data-view="notas" class="view" hidden>
         <div class="card">
           <h3>Notas y recordatorios</h3>
@@ -315,30 +287,22 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
         <span>Inicio</span>
       </button>
-      <button data-tab="venta">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
-        <span>Venta</span>
-      </button>
+      <button data-tab="calculadora">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h1.5M12.5 12h1.5M8 16h1.5M12.5 16h1.5"/></svg>
+          <span>Calculadora de venta</span>
+        </button>
       <button data-tab="catalogo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
         <span>Catálogo</span>
-      </button>
-      <button data-tab="inventario">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="2.5" cy="6" r=".6"/><circle cx="2.5" cy="12" r=".6"/><circle cx="2.5" cy="18" r=".6"/></svg>
-        <span>Inventario</span>
       </button>
       <button data-tab="cashea">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v.01M18 14.5v.01"/></svg>
         <span>Cashea</span>
       </button>
-      <button data-tab="carrusel">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
-        <span>Carrusel</span>
-      </button>
-      <button data-tab="analitica">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M2 20h20"/></svg>
-        <span>Analítica</span>
-      </button>
+        <button data-tab="carrusel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>
+          <span>Carrusel</span>
+        </button>
       <button data-tab="notas">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9l2 2 4-4M8 16h8"/></svg>
         <span>Notas</span>
@@ -364,10 +328,13 @@
   <script src="admin.js"></script>
   <script src="categorias.js"></script>
   <script src="inventario.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="fotos-masivas.js"></script>
   <script src="cashea.js"></script>
-  <script src="cierre.js"></script>
-  <script src="analitica.js"></script>
-  <script src="venta.js"></script>
+  <script src="calculadora.js"></script>
   <script src="carrusel.js"></script>
+  <script src="cierre.js"></script>
+  <script src="excel-cashea.js"></script>
+  <script src="analitica.js"></script>
 </body>
 </html>

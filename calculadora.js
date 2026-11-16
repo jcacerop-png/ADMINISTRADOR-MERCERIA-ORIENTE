@@ -1,0 +1,215 @@
+"use strict";
+/* =========================================================
+   Calculadora de venta: suma los precios de los productos, aplica
+   el IVA si se pide y convierte el total a Bs con la tasa del día.
+   "Aplicar tasa y tienda" pasa la tasa, la tienda y la fecha al
+   formulario de nueva venta de Cashea. Todo se calcula en el
+   navegador: no guarda nada hasta que registres la venta.
+   Requiere config.js, comun.js, admin.js y cashea.js.
+   ========================================================= */
+
+const calc = {
+  filas: [""],         // precios tal como los escribe la persona (texto)
+  factura: null,       // foto de la factura (archivo), se guarda con la venta de Cashea
+  tasa: "",            // tasa de cambio (Bs por 1 USD), texto
+  tienda: "decocintas",
+  fecha: "",           // fecha de venta, AAAA-MM-DD
+  metodo: "",          // método de pago de la inicial (lista de METODOS_PAGO_CASHEA)
+};
+
+const IVA_TASA = 0.16; // IVA fijo: siempre se suma
+const TAB_CASHEA_DE = { decocintas: "cashea-decocintas", merceria: "cashea-merceria", caracas: "cashea-caracas" };
+
+// Formato venezolano: 16.543,76 (punto para miles, coma para decimales)
+const formatoBs = n => {
+  const fijo = (Math.round(n * 100) / 100).toFixed(2);
+  const [entera, decimal] = fijo.split(".");
+  return `${entera.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${decimal}`;
+};
+const formatoUsd = n => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
+
+const fechaLarga = iso => {
+  const [a, m, d] = String(iso || "").split("-");
+  return a && m && d ? `${d}/${m}/${a}` : "";
+};
+
+// Suma, IVA (16%, siempre), total y equivalente en Bs con la tasa escrita
+function totalesCalculadora() {
+  const suma = Math.round(calc.filas.reduce((a, t) => a + (leerMonto(t, 2) || 0), 0) * 100) / 100;
+  const iva = Math.round(suma * IVA_TASA * 100) / 100;
+  const total = Math.round((suma + iva) * 100) / 100;
+  const tasa = leerMonto(calc.tasa, 2);
+  const bs = tasa && tasa > 0 ? Math.round(total * tasa * 100) / 100 : null;
+  return { suma, iva, total, tasa: tasa && tasa > 0 ? tasa : null, bs };
+}
+
+// Pinta las filas de precios (solo cuando cambian: agregar, quitar, limpiar)
+function pintarFilasCalc() {
+  const cont = document.getElementById("calcFilas");
+  if (!cont) return;
+  cont.innerHTML = calc.filas.map((t, i) => `
+    <div class="calc-fila">
+      <input class="input calc-precio" data-i="${i}" inputmode="decimal" autocomplete="off"
+             placeholder="PRECIO DEL PRODUCTO (USD)" value="${esc(t)}" aria-label="Precio del producto ${i + 1}">
+      <button type="button" class="calc-quitar" data-calc="quitar" data-i="${i}" aria-label="Quitar este precio">✕</button>
+    </div>`).join("");
+  pintarTotalesCalc();
+}
+
+// Actualiza solo los números (no toca los campos que la persona está escribiendo)
+function pintarTotalesCalc() {
+  const { suma, iva, total, bs } = totalesCalculadora();
+  const poner = (id, texto) => { const el = document.getElementById(id); if (el) el.textContent = texto; };
+  poner("calcSuma", formatoUsd(suma));
+  poner("calcIvaMonto", formatoUsd(iva));
+  poner("calcTotal", formatoUsd(total));
+  poner("calcUsd", formatoUsd(total));
+  poner("calcBs", bs === null ? "Bs —" : `Bs ${formatoBs(bs)}`);
+}
+
+// Muestra la foto de la factura elegida, con opción de quitarla
+function pintarFotoCalc() {
+  const caja = document.getElementById("calcFotoVista");
+  if (!caja) return;
+  caja.innerHTML = calc.factura
+    ? `<div class="foto-factura-marco"><img src="${URL.createObjectURL(calc.factura)}" alt="Foto de la factura"></div>
+       <button type="button" class="btn ghost sm" data-calc="quitar-foto">Quitar foto</button>`
+    : `<p class="muted small">Todavía no hay foto de la factura.</p>`;
+}
+
+// Pone en pantalla la configuración guardada (tienda, fecha, tasa)
+function pintarConfigCalc() {
+  if (!calc.fecha) calc.fecha = hoyISO();
+  const tienda = document.getElementById("calcTienda");
+  const fecha = document.getElementById("calcFecha");
+  const tasa = document.getElementById("calcTasa");
+  if (tienda) tienda.value = calc.tienda;
+  if (fecha) fecha.value = calc.fecha;
+  if (tasa) tasa.value = calc.tasa;
+  const metodo = document.getElementById("calcMetodo");
+  if (metodo) {
+    metodo.innerHTML = '<option value="">Elige…</option>' +
+      METODOS_PAGO_CASHEA.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+    metodo.value = calc.metodo;
+  }
+  pintarEstadoAplicado();
+}
+
+function pintarEstadoAplicado() {
+  const el = document.getElementById("calcAplicado");
+  if (!el) return;
+  const a = adm.calcAplicado;
+  el.textContent = a
+    ? `Aplicado a la venta Cashea: ${TIENDAS_CASHEA[a.tienda] || ""} · ${fechaLarga(a.fecha)} · 1 USD = ${formatoBs(a.tasa)} Bs`
+    : "Todavía no se ha aplicado la tasa ni la tienda.";
+}
+
+// Llamado al entrar en la pestaña
+function pintarCalculadora() {
+  pintarFilasCalc();
+  pintarConfigCalc();
+  pintarFotoCalc();
+}
+
+// Toma la tasa de la venta Cashea más reciente que tenga tasa
+async function sincronizarTasaCalc() {
+  // Si nunca se abrió una pestaña de Cashea, las ventas aún no están cargadas: se piden ahora
+  if (!(adm.cashea || []).length && typeof refrescarCashea === "function") await refrescarCashea();
+  const ultima = (adm.cashea || []).find(v => Number(v.tasa) > 0);
+  if (!ultima) return toast("Aún no hay una venta Cashea con tasa. Escribe la tasa del día.");
+  calc.tasa = formatoBs(Number(ultima.tasa));
+  const tasa = document.getElementById("calcTasa");
+  if (tasa) tasa.value = calc.tasa;
+  pintarTotalesCalc();
+  toast(`Tasa tomada de la última venta: ${calc.tasa} Bs`);
+}
+
+// Pasa tienda, fecha, tasa y foto de la factura a una nueva venta de Cashea y abre ese formulario
+function aplicarCalc() {
+  const tasa = leerMonto(calc.tasa, 2);
+  if (!tasa || tasa <= 0) return toast("Escribe una tasa de cambio válida antes de aplicar.");
+  if (!TIENDAS_CASHEA[calc.tienda]) return toast("Elige una tienda.");
+  const { total } = totalesCalculadora();
+  adm.calcAplicado = {
+    tienda: calc.tienda,
+    fecha: calc.fecha || hoyISO(),
+    tasa,
+    monto: total,
+    metodo: calc.metodo || null,
+    factura: calc.factura,
+  };
+  pintarEstadoAplicado();
+  limpiarTodoCalc();
+  irA(TAB_CASHEA_DE[adm.calcAplicado.tienda]);
+  abrirFormCashea(null);
+}
+
+// Vacía toda la calculadora: precios, tasa, tienda, fecha y foto vuelven a su estado inicial
+function limpiarTodoCalc() {
+  calc.filas = [""];
+  calc.tasa = "";
+  calc.tienda = "decocintas";
+  calc.fecha = hoyISO();
+  calc.metodo = "";
+  calc.factura = null;
+  pintarFilasCalc();
+  pintarConfigCalc();
+  pintarFotoCalc();
+}
+
+// Borra los precios y el IVA. La tienda, la fecha y la tasa se mantienen
+function limpiarCalc() {
+  calc.filas = [""];
+  calc.factura = null;
+  pintarFilasCalc();
+  pintarFotoCalc();
+  toast("Calculadora limpia");
+}
+
+/* ---------- Eventos ---------- */
+document.addEventListener("input", (e) => {
+  if (e.target.classList.contains("calc-precio")) {
+    calc.filas[Number(e.target.dataset.i)] = e.target.value;
+    return pintarTotalesCalc();
+  }
+  if (e.target.id === "calcTasa") {
+    calc.tasa = e.target.value;
+    pintarTotalesCalc();
+  }
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target.id === "calcFotoSubir") {
+    const archivo = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (archivo) { calc.factura = archivo; pintarFotoCalc(); }
+    return;
+  }
+  if (e.target.id === "calcTienda") calc.tienda = e.target.value;
+  if (e.target.id === "calcMetodo") calc.metodo = e.target.value;
+  if (e.target.id === "calcFecha") calc.fecha = e.target.value || hoyISO();
+});
+
+document.addEventListener("click", (e) => {
+  const boton = e.target.closest("[data-calc]");
+  if (!boton) return;
+  switch (boton.dataset.calc) {
+    case "mas": {
+      calc.filas.push("");
+      pintarFilasCalc();
+      const nuevos = document.querySelectorAll(".calc-precio");
+      if (nuevos.length) nuevos[nuevos.length - 1].focus();
+      return;
+    }
+    case "quitar": {
+      const i = Number(boton.dataset.i);
+      calc.filas.splice(i, 1);
+      if (!calc.filas.length) calc.filas = [""];
+      return pintarFilasCalc();
+    }
+    case "quitar-foto": calc.factura = null; return pintarFotoCalc();
+    case "sync": return sincronizarTasaCalc();
+    case "aplicar": return aplicarCalc();
+    case "limpiar": return limpiarCalc();
+  }
+});

@@ -21,7 +21,7 @@ const CASHEA_PCT = { inicial: 40, comision: 4, adelanto: 4 }; // valores de cada
 const CASHEA_TOLERANCIA_USD = 0.5; // una diferencia menor a esto se considera "cuadra"
 const RESULTADO_CASHEA = { cuadra: "Cuadra", mas: "Le descontó de más", menos: "Le descontó de menos", sin: "Sin comprobar" };
 const TIENDAS_CASHEA = { decocintas: "DECOCINTAS", merceria: "Mercería de Oriente", caracas: "Caracas" };
-const METODOS_PAGO_CASHEA = ["Efectivo USD", "Efectivo Bs", "Pago móvil", "Transferencia", "Punto de venta", "Zelle", "Otro"];
+const METODOS_PAGO_CASHEA = ["Efectivo USD", "Efectivo Bs", "Pago móvil", "Transferencia", "Punto de venta", "Biopago", "Zelle", "Otro"];
 const TAB_TIENDA_CASHEA = { cashea: "todas", "cashea-decocintas": "decocintas", "cashea-merceria": "merceria", "cashea-caracas": "caracas" };
 const vistaCashea = { filtro: "todas", q: "", tienda: "todas" }; // solo lo que se ve en pantalla
 
@@ -308,7 +308,7 @@ function abrirDetalleCashea(id) {
         ${fila("Cliente", esc(`${v.nombre} ${v.apellido}`))}
         ${fila("Cédula", esc(v.cedula || "Sin registrar"))}
         ${fila("Día de la venta", esc(fechaTxt(v.fecha)))}
-        ${fila("Monto total", usd(v.monto_total_usd))}
+        ${fila("Monto total", `${usd(v.monto_total_usd)} · ${bsTxt(Number(v.monto_total_usd) * Number(v.tasa))} a la tasa de venta`)}
         ${fila("Tasa BCV de la venta", numeroVE(v.tasa))}
         ${fila("Método de pago de la inicial", esc(v.metodo_pago || "Sin registrar"))}
         ${fila(`Inicial en caja (${Number(v.pct_inicial)}%)`, `${usd(c.inicialUsd)} · ${bsTxt(c.inicialBs)}`)}
@@ -321,12 +321,64 @@ function abrirDetalleCashea(id) {
         ${fila("Registrada por", esc(v.registrado_por || "—") + (v.creado_en ? ` · ${esc(fechaHoraTxt(v.creado_en))}` : ""))}
         ${v.actualizado_por ? fila("Último cambio", esc(v.actualizado_por) + (v.actualizado_en ? ` · ${esc(fechaHoraTxt(v.actualizado_en))}` : "")) : ""}
       </dl>
+      <div class="det-factura" id="detFactura"><p class="muted small">Cargando la foto de la factura…</p></div>
       <div class="acciones-sheet">
         <button type="button" class="btn ghost" data-cashea="cerrar">Cerrar</button>
         ${acciones}
       </div>
     </div>`;
   abrirModal();
+  cargarFacturaDetalle(v);
+}
+
+/* ---------- Foto de la factura ---------- */
+// Foto de la factura del formulario abierto: blob (nueva, sin subir) o ruta (ya guardada)
+let formFactura = { blob: null, path: null };
+
+async function urlFotoFactura(ruta) {
+  const { data, error } = await sb.storage.from("facturas").createSignedUrl(ruta, 3600);
+  if (error || !data || !data.signedUrl) throw new Error(error ? error.message : "sin enlace");
+  return data.signedUrl;
+}
+
+// Muestra en el formulario los botones para tomar o elegir la foto, y la foto actual
+async function pintarFotoFormCashea() {
+  const caja = document.getElementById("casheaFoto");
+  if (!caja) return;
+  let vista = `<p class="muted small">Todavía no hay foto de la factura.</p>`;
+  if (formFactura.blob) {
+    vista = `<div class="foto-factura-marco"><img src="${URL.createObjectURL(formFactura.blob)}" alt="Foto de la factura"></div>`;
+  } else if (formFactura.path) {
+    try {
+      vista = `<div class="foto-factura-marco"><img src="${esc(await urlFotoFactura(formFactura.path))}" alt="Foto de la factura"></div>`;
+    } catch (err) {
+      vista = `<p class="error">No se pudo cargar la foto guardada: ${esc(err.message || "error")}</p>`;
+    }
+  }
+  caja.innerHTML = `
+    <div class="factura-cab">
+      <span class="factura-titulo">Foto de la factura *</span>
+      <label class="btn sm" style="cursor:pointer">+ Subir foto<input type="file" id="casheaFotoSubir" accept="image/*" class="sr"></label>
+    </div>
+    ${vista}`;
+}
+
+// Foto de la factura dentro del detalle de la venta
+async function cargarFacturaDetalle(v) {
+  const caja = document.getElementById("detFactura");
+  if (!caja) return;
+  if (!v.factura_foto) {
+    caja.innerHTML = `<p class="muted small">Esta venta no tiene foto de la factura.</p>`;
+    return;
+  }
+  try {
+    const url = esc(await urlFotoFactura(v.factura_foto));
+    caja.innerHTML = `
+      <span class="factura-titulo">Foto de la factura</span>
+      <a href="${url}" target="_blank" rel="noopener"><img class="foto-factura" src="${url}" alt="Foto de la factura ${esc(v.factura)}"></a>`;
+  } catch (err) {
+    caja.innerHTML = `<p class="error">No se pudo cargar la foto de la factura: ${esc(err.message || "error")}</p>`;
+  }
 }
 
 /* ---------- Comprobar el pago de Cashea ---------- */
@@ -427,12 +479,16 @@ function abrirFormCashea(id) {
   if (v && v.estado !== "pendiente") return toast("Solo se editan las ventas pendientes.");
   if (v && mesCerrado(periodoDe(v.fecha))) return toast("Ese mes ya está cerrado: esta venta no se puede editar.");
   // La tasa sugerida es la de la venta más reciente (se puede cambiar)
-  const tasaSugerida = v ? v.tasa : (adm.cashea[0] ? adm.cashea[0].tasa : "");
+  const aplicado = !v ? adm.calcAplicado : null; // tasa, tienda y fecha que vienen de la calculadora
+  const tasaSugerida = v ? v.tasa : (aplicado ? aplicado.tasa : (adm.cashea[0] ? adm.cashea[0].tasa : ""));
   const tiendaFija = vistaCashea.tienda !== "todas" ? vistaCashea.tienda : null;
   const opcionesTienda = Object.entries(TIENDAS_CASHEA)
-    .map(([k, n]) => `<option value="${k}" ${k === (v ? v.tienda : "") ? "selected" : ""}>${esc(n)}</option>`).join("");
+    .map(([k, n]) => `<option value="${k}" ${k === (v ? v.tienda : (aplicado ? aplicado.tienda : "")) ? "selected" : ""}>${esc(n)}</option>`).join("");
+  // Foto de la factura: la que llega desde la calculadora, o la que ya tiene la venta
+  formFactura = { blob: aplicado && aplicado.factura ? aplicado.factura : null, path: v ? v.factura_foto || null : null };
+  const metodoInicial = v ? v.metodo_pago : (aplicado ? aplicado.metodo : "");
   const opcionesMetodo = METODOS_PAGO_CASHEA
-    .map(m => `<option value="${esc(m)}" ${v && v.metodo_pago === m ? "selected" : ""}>${esc(m)}</option>`).join("");
+    .map(m => `<option value="${esc(m)}" ${metodoInicial === m ? "selected" : ""}>${esc(m)}</option>`).join("");
 
   $("#modal .sheet").innerHTML = `
     <form id="formCashea" class="form-cashea" data-id="${v ? esc(v.id) : ""}" novalidate>
@@ -443,16 +499,17 @@ function abrirFormCashea(id) {
           ? `<input type="hidden" name="tienda" value="${tiendaFija}">`
           : `<label>Tienda *<select name="tienda"><option value="">Elige la tienda…</option>${opcionesTienda}</select></label>`}
         <label>Factura *<input name="factura" maxlength="40" autocomplete="off" value="${esc(v ? v.factura : "")}"></label>
-        <label>Día *<input name="fecha" type="date" value="${esc(v ? v.fecha : hoyISO())}"></label>
+        <label>Día *<input name="fecha" type="date" value="${esc(v ? v.fecha : (aplicado ? aplicado.fecha : hoyISO()))}"></label>
         <label>Nombre *<input name="nombre" maxlength="60" autocomplete="off" value="${esc(v ? v.nombre : "")}"></label>
         <label>Apellido *<input name="apellido" maxlength="60" autocomplete="off" value="${esc(v ? v.apellido : "")}"></label>
         <label>Cédula *<input name="cedula" maxlength="14" autocomplete="off" placeholder="V-12345678" value="${esc(v && v.cedula ? v.cedula : "")}"></label>
-        <label>Monto total en dólares (USD) *<input name="monto_total_usd" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v ? v.monto_total_usd : "", 4))}"></label>
+        <label>Monto total en dólares (USD) *<input name="monto_total_usd" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v ? v.monto_total_usd : (aplicado && aplicado.monto ? aplicado.monto : ""), 4))}"></label>
         <label>Tasa BCV de la venta *<input name="tasa" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(tasaSugerida, 4))}"></label>
         <label>Método de pago de la inicial *<select name="metodo_pago"><option value="">Elige…</option>${opcionesMetodo}</select></label>
       </div>
       <p class="muted small">Inicial ${CASHEA_PCT.inicial}% en caja. Cashea descuenta ${CASHEA_PCT.comision}% servicio + ${CASHEA_PCT.adelanto}% adelanto.</p>
       <div class="cs-calc" id="casheaCalc" aria-live="polite"></div>
+      <div class="factura-campo" id="casheaFoto"></div>
       ${v ? "" : `<label>Estado al guardar<select name="estado"><option value="pendiente">Pendiente</option><option value="cobrada">Cobrada</option></select></label>`}
       <p class="error" id="casheaError" hidden></p>
       <div class="acciones-sheet">
@@ -461,6 +518,7 @@ function abrirFormCashea(id) {
       </div>
     </form>`;
   abrirModal();
+  pintarFotoFormCashea();
   actualizarResumenCashea($("#formCashea"));
   $("#formCashea [name=factura]").focus();
 }
@@ -519,6 +577,11 @@ async function guardarCashea(e) {
     error.hidden = false;
     return;
   }
+  if (!formFactura.blob && !formFactura.path) {
+    error.textContent = "Sube la foto de la factura con el botón + Subir foto.";
+    error.hidden = false;
+    return;
+  }
   if (!id) {
     // Cada venta nueva guarda sus porcentajes: si después cambian, esta venta no se mueve
     d.pct_inicial = CASHEA_PCT.inicial;
@@ -530,11 +593,27 @@ async function guardarCashea(e) {
   const boton = form.querySelector("[type=submit]");
   boton.disabled = true;
   try {
+    d.factura_foto = formFactura.path;
+    if (formFactura.blob) {
+      const jpg = await comprimir(formFactura.blob, 1600);
+      const ruta = `ventas/${crypto.randomUUID()}.jpg`;
+      const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
+        contentType: "image/jpeg",
+        cacheControl: "3600",
+      });
+      if (errorFoto) throw errorFoto;
+      d.factura_foto = ruta;
+    }
     const consulta = id
       ? sb.from("cashea_ventas").update(d).eq("id", id)
       : sb.from("cashea_ventas").insert(d);
     const { error: errorBD } = await consulta;
     if (errorBD) throw errorBD;
+    if (!id) {
+      // La foto ya quedó guardada con la venta: la calculadora ya no la necesita
+      formFactura = { blob: null, path: null };
+      adm.calcAplicado = null;
+    }
     cerrarModal();
     toast(id ? "Venta actualizada." : "Venta registrada.");
     await refrescarCashea();
@@ -567,9 +646,8 @@ async function cambiarEstadoCashea(id, estado) {
 }
 
 /* ---------- Excel de las ventas que se ven ---------- */
-function exportarCashea() {
-  const filas = casheaFiltradas();
-  if (!filas.length) return toast("No hay ventas con este filtro para exportar.");
+// Versión simple del Excel de Cashea (se usa solo si ExcelJS no carga)
+function exportarCasheaSimple(filas) {
   try {
     const cab = ["Factura", "Día", "Tienda", "Nombre", "Apellido", "Cédula", "Método de pago de la inicial",
       "Monto total USD", "Tasa BCV venta", "% inicial",
@@ -633,6 +711,15 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.id === "casheaFotoSubir") {
+    const archivo = t.files && t.files[0];
+    t.value = "";
+    if (archivo) {
+      formFactura.blob = archivo;
+      pintarFotoFormCashea();
+    }
+    return;
+  }
   if (t.closest && t.closest("#formCashea")) actualizarResumenCashea(t.form);
   if (t.closest && t.closest("#formComprobar")) actualizarComprobarCashea(t.form);
 });

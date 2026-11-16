@@ -136,10 +136,8 @@ async function cargar() {
 
 // Cada pestaña nueva se refresca solo cuando se abre (o cuando llegan cambios en vivo)
 function alEntrarTab(tab) {
-  if (tab === "venta" && typeof refrescarVenta === "function") refrescarVenta();
-  if (tab === "analitica" && typeof refrescarAnalitica === "function") refrescarAnalitica();
+  if (tab === "calculadora" && typeof pintarCalculadora === "function") pintarCalculadora();
   if (tab === "carrusel" && typeof refrescarCarrusel === "function") refrescarCarrusel();
-  if (tab === "inventario" && typeof pintarInventario === "function") pintarInventario();
   if (tab.startsWith("cashea") && typeof refrescarCashea === "function") {
     if (typeof fijarTiendaCashea === "function") fijarTiendaCashea(tab);
     refrescarCashea();

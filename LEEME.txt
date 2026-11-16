@@ -1,50 +1,80 @@
-MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 11)
+MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 16)
 
 Archivos de esta carpeta:
-  Administracion.html       Panel (menú: Inicio, Venta, Catálogo, Inventario, Cashea total,
-                            Cashea DECOCINTAS, Cashea Mercería de Oriente, Cashea Caracas,
-                            Carrusel, Analítica, Notas, Cierre de mes)
+  Administracion.html       Panel (menú: Inicio, Calculadora de venta, Catálogo, Cashea total,
+                            Cashea DECOCINTAS, Cashea Mercería de Oriente, Cashea Caracas, Carrusel,
+                            Notas, Cierre de mes)
   admin.js                  Lógica general del panel (login, catálogo, plantillas, notas)
-  inventario.js             Inventario: lista, buscador e importación desde Excel (formato de tu archivo)
-  cashea.js                 Ventas por Cashea: registrar, comprobar el pago, detalle, cobrar, anular y exportar
-  cierre.js                 Cierre de mes: totales por caja, cierre manual y Excel contable (NUEVO)
-  venta.js                  Venta rápida
-  analitica.js              Analítica y Excel del periodo
-  carrusel.js               Fotos del carrusel (fondo de la entrada del catálogo)
+  calculadora.js            Calculadora de venta, IVA 16% y foto de la factura
+  fotos-masivas.js          Subida masiva de fotos desde Catálogo (por código del producto)
+  inventario.js             Importar Excel de inventario (desde Catálogo)
+  cashea.js                 Ventas por Cashea: factura con foto, detalle, comprobar, cobrar, anular y exportar
+  cierre.js                 Cierre de mes y Excel contable
+  carrusel.js               Carrusel de fotos de la entrada del catálogo
+  analitica.js              Funciones de Excel compartidas (la pestaña Analítica se quitó)
   categorias.js             Categorías: crear, renombrar, ocultar, ordenar y borrar
   comun.js                  Compartido (funciones comunes y orden por arrastre)
   config.js                 Tus datos de Supabase (ya incluidos: no lo cambies)
   styles.css                Diseño (negro y amarillo, tema claro y oscuro)
   logo.png                  Logo
-  supabase-merceria-v9.sql  Actualización 9: tiendas de Cashea, cédula, método de pago y cierre de mes
+  supabase-merceria-v9.sql  Base de datos (ya la tienes de la versión 11)
+  supabase-facturas.sql     Base de datos: foto de la factura (ver paso 1)
+  supabase-biopago.sql      Base de datos NUEVA: método de pago Biopago (ver paso 1)
+  excel-cashea.js           Excel de Cashea por tienda, con el formato del cierre de mes
 
-Pasos para esta actualización (versión 11):
-1. Base de datos: en Supabase, abre SQL Editor, pega el contenido de supabase-merceria-v9.sql y dale Run.
-   Debe correrse después de la v8. Es seguro correrlo más de una vez y no borra ventas.
-   Las ventas que ya existían quedan como "Mercería de Oriente" y sin cédula ni método de pago.
-2. Cierre automático (recomendado): en Supabase ve a Database → Extensions, activa "pg_cron"
-   y vuelve a dar Run a la v9. Sin pg_cron, el cierre queda solo a mano (botón "Cerrar mes").
-   El panel te avisa cuando hay meses terminados sin cerrar.
-3. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
-   Administracion.html, admin.js, cashea.js, inventario.js y styles.css.
-   Sube también cierre.js, que es nuevo.
-   Los demás archivos no cambiaron. NO subas config.js: conserva el tuyo.
-4. Súbelo al mismo lugar donde está el panel (GitHub o Netlify).
+Pasos para esta actualización (versión 16):
+1. ANTES de subir el panel: en Supabase abre SQL Editor, pega el contenido de supabase-biopago.sql
+   y dale Run. Agrega "Biopago" a los métodos de pago permitidos. No borra ventas. Sin este paso,
+   guardar una venta con Biopago dará error.
+   (Si ya corriste supabase-facturas.sql en la versión 14, no hace falta volver a correrlo.)
+2. Sube a la misma carpeta del panel estos archivos, reemplazando los anteriores:
+   Administracion.html, cashea.js, calculadora.js, excel-cashea.js (archivo NUEVO).
+   Los demás no cambiaron. NO subas config.js: conserva el tuyo.
+3. Súbelo al mismo lugar donde está el panel (GitHub o Netlify).
+4. Puedes borrar venta.js de la carpeta: ya no se usa.
 
-Importar inventario (Excel):
-- El archivo debe tener los encabezados en la fila 2 (la fila 1 se ignora).
-- CÓDIGO → código · PRODUCTO → nombre · CANTIDAD → existencias · P X UNIDAD $ → precio detal · PRECIO MAYOR → precio mayor.
-- PRESENTACIÓN, MATERIAL y METROS se ignoran.
-- Si el archivo no trae categoría, eliges una en la vista previa. Se aplica a los productos nuevos;
-  los que ya existen mantienen su categoría.
-- Los productos nuevos se crean ocultos hasta que les pongas fotos y los publiques.
+Calculadora de venta:
+- Sumatoria de productos: escribe el precio de cada producto en USD. "+ Agregar precio" añade otra
+  fila y ✕ la quita.
+- IVA (16%): siempre se suma al total. Se ve su monto justo arriba del total.
+- Tasa de cambio (1 USD = XX Bs): escríbela con la tasa del día. El botón ⟳ toma la tasa de la última
+  venta de Cashea (no consulta el BCV en internet).
+- Monto total en USD y en Bs se calculan solos mientras escribes.
+- Método de pago de la inicial: elige el método (Efectivo USD, Efectivo Bs, Pago móvil, Transferencia,
+  Punto de venta, Biopago, Zelle u Otro). Se pasa al formulario de Cashea al aplicar.
+- Foto de la factura: el botón "+ Subir foto" está arriba de la foto. Sirve para elegir una foto de la
+  galería o tomarla con la cámara del celular. La foto se ve en un marco igual al del catálogo.
+- APLICAR TASA Y TIENDA: pasa la tienda, la fecha, la tasa, el monto total y la foto a una nueva venta
+  de Cashea, te lleva a la Cashea de esa tienda con el formulario abierto, y LIMPIA la calculadora
+  (precios, tasa, tienda, fecha y foto vuelven a su estado inicial).
+- LIMPIAR CALCULADORA: borra los precios. La tienda, la fecha, la tasa y la foto se quedan.
+- La calculadora no guarda nada en la base de datos hasta que registras la venta en Cashea.
+
+Catálogo: importar Excel y subir fotos:
+- Importar Excel: CÓDIGO → código · PRODUCTO → nombre · CANTIDAD → existencias · P X UNIDAD $ → precio
+  detal · PRECIO MAYOR → precio mayor. USOS y DESCRIPCIÓN son opcionales: los usos se separan con punto
+  y coma (;). Usa la plantilla Inventario_Rodolfo_con_usos_y_descripcion.xlsx.
+- Si el archivo no trae categoría, eliges una en la vista previa. Se aplica a los productos nuevos.
+- Las celdas de USOS o DESCRIPCIÓN vacías no borran lo que ya tiene un producto existente.
 - Las filas sin precio o con un código repetido aparecen como error y no se importan.
+- Subir fotos (masivo): elige todas las fotos juntas o un archivo .zip. Cada foto se relaciona con el
+  producto por su CÓDIGO: el nombre del archivo debe ser el código (ej. ACC-M-037.png). Las / del código
+  se cambian por -. Al subir la foto, el producto se publica solo.
+- Si dos productos tienen el mismo código, la foto no se sube. Si un producto ya tiene 8 fotos, no recibe más.
+  Al terminar verás la lista de fotos sin producto para renombrarlas y volver a subirlas.
 
 Cashea (ventas):
 - Cada venta pertenece a una tienda: DECOCINTAS, Mercería de Oriente o Caracas.
   "Cashea total" muestra las tres y te deja elegir la tienda; cada sección de tienda ya la trae fija.
-- Cada venta nueva pide cédula (V, E, J o G seguido de los números) y el método de pago de la inicial:
-  Efectivo USD, Efectivo Bs, Pago móvil, Transferencia, Punto de venta, Zelle u Otro.
+- Cada venta pide: foto de la factura (botón "+ Subir foto", de la galería o de la cámara), cédula
+  (V, E, J o G seguido de los números) y el método de pago de la inicial: Efectivo USD, Efectivo Bs,
+  Pago móvil, Transferencia, Punto de venta, Zelle u Otro.
+- La foto de la factura es obligatoria: si la venta no tiene foto, no se guarda.
+- Detalle: muestra el monto total en USD y en Bs (a la tasa de la venta), y la foto de la factura.
+- Exportar Excel: estando en la pestaña de una tienda (DECOCINTAS, Mercería de Oriente o Caracas), exporta
+  solo esa tienda, con el mismo formato del cierre de mes: encabezado azul, totales con fórmula y filtro.
+  Respeta el filtro (Pendientes, Cobradas, Anuladas) y la búsqueda que tienes en pantalla. La hoja
+  "Resumen" trae los totales de la tienda. En "Cashea total" salen todas las tiendas, cada una en su hoja.
 - Inicial 40% en caja, en bolívares a la tasa BCV de la venta. Cashea financia el 60% y descuenta
   8% (4% servicio tecnológico + 4% adelanto). Liquidación esperada = financiado − 8%.
 - Mientras una venta está pendiente puedes Comprobar el pago, Marcar cobrada, Editar o Anular.
@@ -53,15 +83,10 @@ Cashea (ventas):
 
 Cierre de mes:
 - Elige el mes y verás los totales de cada caja: ventas, anuladas, total, inicial, descuentos y liquidación.
-- Exportar ventas mensuales por caja: un Excel con la hoja Resumen y una hoja por caja. Cada hoja trae
-  Nº, fecha, factura, nombre, apellido, cédula, monto total, tasa, método de pago, inicial, financiado,
-  descuentos, liquidación, estado, pago de Cashea, resultado de la comprobación y detalles.
-  Encabezados azul marino, bordes y totales. Las anuladas salen, pero no suman en los totales.
-  El formato usa la librería ExcelJS desde jsDelivr; si no carga, sale una versión simple.
-- Cerrar mes (botón): guarda el resumen del mes. Después, sus ventas ya no admiten cambios de datos:
-  solo se pueden cobrar, anular y comprobar. No se pueden crear ventas con fecha de un mes cerrado.
+- Exportar ventas mensuales por caja: un Excel con la hoja Resumen y una hoja por caja.
+- Cerrar mes (botón): guarda el resumen del mes. Después, sus ventas ya no admiten cambios de datos.
 - Cierre automático: todos los días a las 11:59 p. m. (hora de Caracas) se revisa si es el último día
-  del mes; si lo es, cierra el mes. Si ya lo cerraste a mano, no hace nada: el manual tiene prioridad.
-- "Cerrar meses vencidos" aparece cuando hay meses terminados sin cerrar. Lo cierra solo al pulsarlo.
+  del mes; si lo es, cierra el mes. Si ya lo cerraste a mano, no hace nada.
+- "Cerrar meses vencidos" aparece cuando hay meses terminados sin cerrar.
 
 Nunca pongas la clave "service_role" en ningún archivo.
