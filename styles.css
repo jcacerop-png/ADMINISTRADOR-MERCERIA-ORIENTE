@@ -1485,3 +1485,50 @@ body.panel .calc-mini-ini {
   }
 }
 
+/* ======================================================
+   v17 · Vista previa de Imagen Hero Full-Bleed del pie de página
+   ====================================================== */
+.hero-pie-previa {
+  margin-top: 12px;
+}
+.hero-pie-demo {
+  position: relative;
+  min-height: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  background-color: #0D0D0D;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+  padding: 24px;
+  box-shadow: var(--sombra);
+}
+.hero-pie-demo.sin-imagen {
+  background:
+    radial-gradient(500px 180px at 85% 15%, rgba(250, 204, 21, .22), transparent 65%),
+    radial-gradient(400px 180px at 10% 90%, rgba(250, 204, 21, .14), transparent 60%),
+    linear-gradient(145deg, #161616, #0A0A0A);
+}
+.hero-pie-demo-velo {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 10, 10, .35) 0%, rgba(10, 10, 10, .82) 70%, rgba(10, 10, 10, .94) 100%);
+}
+.hero-pie-demo-contenido {
+  position: relative;
+  z-index: 1;
+  color: #F5F5F5;
+  max-width: 560px;
+}
+.hero-pie-demo-contenido h4 {
+  margin: 4px 0;
+  font-size: 24px;
+  color: #FACC15;
+}
+.hero-pie-demo-contenido p {
+  color: rgba(245, 245, 245, .82);
+}
+
+

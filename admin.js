@@ -1042,11 +1042,41 @@ document.addEventListener("submit", (e) => {
 });
 
 /* ---------- Arranque ---------- */
-function iniciar() {
+async function iniciar() {
   if (!CONFIGURADO) {
     toast("Falta configurar Supabase en config.js");
     return;
   }
+  sb.auth.onAuthStateChange((evento, session) => {
+    if (evento === "SIGNED_OUT" && adm.usuaria) {
+      adm.usuaria = null;
+      adm.form = null;
+      cerrarModal();
+      mostrarLogin();
+    } else if (evento === "TOKEN_REFRESHED" && session && session.user) {
+      const email = String(session.user.email || "").toLowerCase().trim();
+      if (CUENTAS[email]) adm.usuaria = CUENTAS[email];
+    }
+  });
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible" && adm.usuaria) {
+      const sesion = await asegurarSesion();
+      if (sesion && adm.tab.startsWith("cashea") && typeof refrescarCashea === "function") {
+        refrescarCashea();
+      }
+    }
+  });
+  try {
+    const { data } = await sb.auth.getSession();
+    const email = data && data.session && data.session.user
+      ? String(data.session.user.email || "").toLowerCase().trim()
+      : "";
+    if (email && CUENTAS[email]) {
+      adm.usuaria = CUENTAS[email];
+      await entrarPanel();
+      return;
+    }
+  } catch { /* si falla, muestra el login */ }
   mostrarLogin();
 }
 

@@ -365,14 +365,32 @@
         <div class="card" id="casheaTabla"></div>
       </section>
 
-      <!-- NOTAS -->
-      <!-- CARRUSEL -->
+      <!-- CARRUSEL Y PERSONALIZACIÓN DEL CATÁLOGO -->
       <section data-view="carrusel" class="view" hidden>
+        <div class="card hero-pie-config" style="margin-bottom:16px">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Personalización del catálogo</span>
+              <h3>Imagen Hero Full-Bleed del pie de página</h3>
+              <p class="hint" style="margin:4px 0 0">Se muestra a ancho completo (100% de borde a borde) en el cierre del catálogo público con un velo degradado oscuro para resaltar la marca y el botón de WhatsApp.</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button type="button" class="btn ghost sm" id="btnHeroPieQuitar" hidden>Quitar imagen</button>
+              <label class="btn sm btn-file" style="cursor:pointer">
+                <span id="lblHeroPieSubir">+ Subir imagen Hero</span>
+                <input type="file" id="heroPieIn" accept="image/*" class="sr">
+              </label>
+            </div>
+          </div>
+          <p class="muted small" id="heroPieEstado" style="margin-top:8px">Cargando configuración…</p>
+          <div id="heroPieVista" class="hero-pie-previa"></div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <div>
               <h3>Carrusel de fotos</h3>
-              <p class="hint" style="margin:4px 0 0">Son el fondo de la pantalla de entrada del catálogo. Máximo 10. Usa ▲ y ▼ para ordenarlas.</p>
+              <p class="hint" style="margin:4px 0 0">Fotos destacadas del catálogo. Máximo 10. Usa ▲ y ▼ para ordenarlas.</p>
             </div>
             <label class="btn sm" style="cursor:pointer">+ Subir fotos
               <input type="file" id="carIn" accept="image/*" multiple class="sr">

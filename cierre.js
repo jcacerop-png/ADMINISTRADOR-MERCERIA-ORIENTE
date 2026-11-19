@@ -284,21 +284,24 @@ function hojaResumenXL(libro, periodo, filas, totales) {
 function hojaCajaXL(libro, periodo, caja) {
   const ws = libro.addWorksheet(caja.hoja);
   const columnas = [
-    "Nº", "Fecha", "Factura", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Tasa BCV de venta (Bs)",
+    "Nº", "Fecha", "Factura Fiscal", "Factura Cashea", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Tasa BCV de venta (Bs)",
     "Método de pago (inicial)", "Inicial (US$)", "Financiado (US$)", "Descuentos (US$)", "Liquidación (US$)",
     "Estado", "Pago de Cashea (Bs)", "Resultado de la comprobación", "Detalles",
   ];
   encabezadoBloqueXL(ws, periodo, columnas.length);
   encabezadoTablaXL(ws, 5, columnas);
   ws.columns = [
-    { width: 6 }, { width: 12 }, { width: 14 }, { width: 16 }, { width: 16 }, { width: 14 },
+    { width: 6 }, { width: 12 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 14 },
     { width: 15 }, { width: 15 }, { width: 18 }, { width: 13 }, { width: 14 }, { width: 14 }, { width: 15 },
     { width: 12 }, { width: 16 }, { width: 22 }, { width: 46 },
   ];
 
+  const fiscalDe = v => (typeof facturaFiscalDe === "function" ? facturaFiscalDe(v) : String(v.factura_fiscal || v.factura || ""));
+  const casheaDe = v => (typeof facturaCasheaDe === "function" ? facturaCasheaDe(v) : String(v.factura_cashea || ""));
+
   const lista = ventasDelPeriodo(periodo)
     .filter(v => v.tienda === caja.clave)
-    .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : String(a.factura).localeCompare(String(b.factura), "es")));
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : fiscalDe(a).localeCompare(fiscalDe(b), "es")));
 
   if (!lista.length) {
     ws.mergeCells(6, 1, 6, columnas.length);
@@ -323,7 +326,8 @@ function hojaCajaXL(libro, periodo, caja) {
     const valores = [
       i + 1,
       v.fecha ? new Date(`${v.fecha}T00:00:00`) : "",
-      v.factura,
+      fiscalDe(v),
+      casheaDe(v) || "—",
       v.nombre,
       v.apellido,
       v.cedula || "",
@@ -343,9 +347,9 @@ function hojaCajaXL(libro, periodo, caja) {
       const celda = ws.getRow(fila).getCell(j + 1);
       celda.value = valor;
       celda.border = bordeXL;
-      celda.alignment = { vertical: "middle", wrapText: j === 16 };
+      celda.alignment = { vertical: "middle", wrapText: j === 17 };
       if (j === 1) celda.numFmt = "dd/mm/yyyy";
-      if ([6, 7, 9, 10, 11, 12, 14].includes(j)) celda.numFmt = XL.formato;
+      if ([7, 8, 10, 11, 12, 13, 15].includes(j)) celda.numFmt = XL.formato;
       if (anulada) celda.font = { italic: true, color: { argb: XL.grisTexto } };
     });
 
@@ -362,18 +366,18 @@ function hojaCajaXL(libro, periodo, caja) {
   // Fila de totales: suma solo las ventas que no están anuladas
   const filaTotal = 6 + Math.max(lista.length, 1);
   const ultima = filaTotal - 1;
-  ws.mergeCells(filaTotal, 1, filaTotal, 6);
+  ws.mergeCells(filaTotal, 1, filaTotal, 7);
   const etiqueta = ws.getCell(filaTotal, 1);
   etiqueta.value = `TOTAL ${caja.nombre} (sin anuladas)`;
   etiqueta.font = { bold: true };
-  const formulaSuma = col => `SUMIFS(${col}6:${col}${ultima},N6:N${ultima},"<>Anulada")`;
+  const formulaSuma = col => `SUMIFS(${col}6:${col}${ultima},O6:O${ultima},"<>Anulada")`;
   const totales = [
-    { col: 7, letra: "G", valor: redondeo2(sumas.total) },
-    { col: 10, letra: "J", valor: redondeo2(sumas.inicial) },
-    { col: 11, letra: "K", valor: redondeo2(sumas.financiado) },
-    { col: 12, letra: "L", valor: redondeo2(sumas.descuento) },
-    { col: 13, letra: "M", valor: redondeo2(sumas.liquidacion) },
-    { col: 15, letra: "O", valor: redondeo2(sumas.pagado) },
+    { col: 8, letra: "H", valor: redondeo2(sumas.total) },
+    { col: 11, letra: "K", valor: redondeo2(sumas.inicial) },
+    { col: 12, letra: "L", valor: redondeo2(sumas.financiado) },
+    { col: 13, letra: "M", valor: redondeo2(sumas.descuento) },
+    { col: 14, letra: "N", valor: redondeo2(sumas.liquidacion) },
+    { col: 16, letra: "P", valor: redondeo2(sumas.pagado) },
   ];
   for (let j = 1; j <= columnas.length; j++) {
     const celda = ws.getRow(filaTotal).getCell(j);
@@ -387,7 +391,7 @@ function hojaCajaXL(libro, periodo, caja) {
     celda.numFmt = XL.formato;
   });
 
-  ws.views = [{ state: "frozen", ySplit: 5, xSplit: 3 }];
+  ws.views = [{ state: "frozen", ySplit: 5, xSplit: 4 }];
   ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: Math.max(5, 5 + lista.length), column: columnas.length } };
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
 }
@@ -407,6 +411,8 @@ function descargarArchivo(blob, nombre) {
 function exportarCierreSimple(periodo) {
   const libro = XLSX.utils.book_new();
   const { filas, totales } = resumenCierre(periodo);
+  const fiscalDe = v => (typeof facturaFiscalDe === "function" ? facturaFiscalDe(v) : String(v.factura_fiscal || v.factura || ""));
+  const casheaDe = v => (typeof facturaCasheaDe === "function" ? facturaCasheaDe(v) : String(v.factura_cashea || ""));
   const resumen = [
     ["Caja", "Ventas", "Anuladas", "Total (US$)", "Inicial (US$)", "Descuentos (US$)", "Liquidación (US$)"],
     ...filas.map(f => [f.caja.nombre, f.ventas, f.anuladas, f.total, f.inicial, f.descuento, f.liquidacion]),
@@ -417,11 +423,11 @@ function exportarCierreSimple(periodo) {
     const filasCaja = ventasDelPeriodo(periodo).filter(v => v.tienda === caja.clave).map(v => {
       const c = calculoCashea(v);
       const r = compararCashea(v);
-      return [fechaTxt(v.fecha), v.factura, v.nombre, v.apellido, v.cedula || "", Number(v.monto_total_usd) || 0,
+      return [fechaTxt(v.fecha), fiscalDe(v), casheaDe(v), v.nombre, v.apellido, v.cedula || "", Number(v.monto_total_usd) || 0,
         v.metodo_pago || "", c.inicialUsd, c.financiadoUsd, c.descuentoUsd, c.liquidacionUsd,
         ESTADOS_CASHEA[v.estado] || v.estado, r ? r.recibidoBs : "", v.registrado_por || ""];
     });
-    const cab = ["Fecha", "Factura", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Método de pago",
+    const cab = ["Fecha", "Factura Fiscal", "Factura Cashea", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Método de pago",
       "Inicial (US$)", "Financiado (US$)", "Descuentos (US$)", "Liquidación (US$)", "Estado", "Pago de Cashea (Bs)", "Registrada por"];
     XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet([cab, ...filasCaja]), caja.hoja);
   });

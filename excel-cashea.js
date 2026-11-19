@@ -149,7 +149,8 @@ function hojaVentasTiendaXL(libro, clave, lista, filtroTxt) {
     const valores = [
       i + 1,
       v.fecha ? new Date(`${v.fecha}T00:00:00`) : "",
-      v.factura,
+      facturaFiscalDe(v),
+      facturaCasheaDe(v) || "—",
       v.nombre,
       v.apellido,
       v.cedula || "",
@@ -169,9 +170,9 @@ function hojaVentasTiendaXL(libro, clave, lista, filtroTxt) {
       const celda = ws.getRow(fila).getCell(j + 1);
       celda.value = valor;
       celda.border = bordeXL;
-      celda.alignment = { vertical: "middle", wrapText: j === 16 };
+      celda.alignment = { vertical: "middle", wrapText: j === 17 };
       if (j === 1) celda.numFmt = "dd/mm/yyyy";
-      if ([6, 7, 9, 10, 11, 12, 14].includes(j)) celda.numFmt = XL.formato;
+      if ([7, 8, 10, 11, 12, 13, 15].includes(j)) celda.numFmt = XL.formato;
       if (anulada) celda.font = { italic: true, color: { argb: XL.grisTexto } };
     });
   });
@@ -179,19 +180,19 @@ function hojaVentasTiendaXL(libro, clave, lista, filtroTxt) {
   // Fila de totales: suma solo las ventas que no están anuladas
   const filaTotal = 6 + Math.max(lista.length, 1);
   const ultima = filaTotal - 1;
-  ws.mergeCells(filaTotal, 1, filaTotal, 6);
+  ws.mergeCells(filaTotal, 1, filaTotal, 7);
   const etiqueta = ws.getCell(filaTotal, 1);
   etiqueta.value = `TOTAL ${nombre} (sin anuladas)`;
   etiqueta.font = { bold: true };
   const t = totalesVentasXL(lista);
-  const formulaSuma = col => `SUMIFS(${col}6:${col}${ultima},N6:N${ultima},"<>Anulada")`;
+  const formulaSuma = col => `SUMIFS(${col}6:${col}${ultima},O6:O${ultima},"<>Anulada")`;
   const totalesCol = [
-    { col: 7, letra: "G", valor: redondeo2(lista.reduce((a, v) => a + (v.estado === "anulada" ? 0 : Number(v.monto_total_usd) || 0), 0)) },
-    { col: 10, letra: "J", valor: t.inicial },
-    { col: 11, letra: "K", valor: redondeo2(lista.reduce((a, v) => a + (v.estado === "anulada" ? 0 : calculoCashea(v).financiadoUsd), 0)) },
-    { col: 12, letra: "L", valor: t.descuento },
-    { col: 13, letra: "M", valor: t.liquidacion },
-    { col: 15, letra: "O", valor: redondeo2(lista.reduce((a, v) => {
+    { col: 8, letra: "H", valor: redondeo2(lista.reduce((a, v) => a + (v.estado === "anulada" ? 0 : Number(v.monto_total_usd) || 0), 0)) },
+    { col: 11, letra: "K", valor: t.inicial },
+    { col: 12, letra: "L", valor: redondeo2(lista.reduce((a, v) => a + (v.estado === "anulada" ? 0 : calculoCashea(v).financiadoUsd), 0)) },
+    { col: 13, letra: "M", valor: t.descuento },
+    { col: 14, letra: "N", valor: t.liquidacion },
+    { col: 16, letra: "P", valor: redondeo2(lista.reduce((a, v) => {
       const r = compararCashea(v);
       return a + (v.estado === "anulada" || !r ? 0 : r.recibidoBs);
     }, 0)) },
@@ -208,7 +209,7 @@ function hojaVentasTiendaXL(libro, clave, lista, filtroTxt) {
     celda.numFmt = XL.formato;
   });
 
-  ws.views = [{ state: "frozen", ySplit: 5, xSplit: 3 }];
+  ws.views = [{ state: "frozen", ySplit: 5, xSplit: 4 }];
   ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: Math.max(5, 5 + lista.length), column: columnas.length } };
   ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
 }

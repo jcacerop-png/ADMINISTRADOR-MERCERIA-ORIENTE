@@ -6,10 +6,15 @@
 
 const CONFIGURADO = !CONFIG.SUPABASE_URL.includes("PEGA_AQUI");
 
-// Sin persistSession: cada vez que se abre o recarga la página hay que volver a iniciar sesión
+// Con persistSession y autoRefreshToken activos: la sesión se renueva sola y no expira en segundo plano
 const sb = CONFIGURADO
   ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, detectSessionInUrl: false },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storageKey: "mo_admin_auth",
+      },
     })
   : null;
 

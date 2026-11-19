@@ -336,10 +336,16 @@ function abrirDetalleCashea(id) {
   $("#modal .sheet").innerHTML = `
     <div class="det-cashea">
       <div class="det-cab">
-        <div><span class="eyebrow">Factura</span><h2>${esc(v.factura)}</h2></div>
+        <div>
+          <span class="eyebrow">Factura Fiscal</span>
+          <h2>${esc(facturaFiscalDe(v) || "—")}</h2>
+          ${facturaCasheaDe(v) ? `<p class="muted small" style="margin-top:2px">Factura Cashea: <b>${esc(facturaCasheaDe(v))}</b></p>` : ""}
+        </div>
         <span class="pill-estado ${esc(v.estado)}">${ESTADOS_CASHEA[v.estado] || esc(v.estado)}</span>
       </div>
       <dl class="det-lista">
+        ${fila("Factura Fiscal", esc(facturaFiscalDe(v) || "Sin registrar"))}
+        ${fila("Factura Cashea", esc(facturaCasheaDe(v) || "Sin registrar"))}
         ${fila("Tienda", esc(TIENDAS_CASHEA[v.tienda] || v.tienda || "—"))}
         ${fila("Cliente", esc(`${v.nombre} ${v.apellido}`))}
         ${fila("Cédula", esc(v.cedula || "Sin registrar"))}
@@ -483,7 +489,7 @@ async function cargarFacturaDetalle(v) {
     const url = esc(await urlFotoFactura(v.factura_foto));
     caja.innerHTML = `
       <span class="factura-titulo">Foto de la factura</span>
-      <a href="${url}" target="_blank" rel="noopener"><img class="foto-factura" src="${url}" alt="Foto de la factura ${esc(v.factura)}"></a>`;
+      <a href="${url}" target="_blank" rel="noopener"><img class="foto-factura" src="${url}" alt="Foto de la factura ${esc(facturaFiscalDe(v))}"></a>`;
   } catch (err) {
     caja.innerHTML = `<p class="error">No se pudo cargar la foto de la factura: ${esc(err.message || "error")}</p>`;
   }
@@ -498,7 +504,7 @@ function abrirComprobarCashea(id) {
   $("#modal .sheet").innerHTML = `
     <form id="formComprobar" class="form-cashea" data-id="${esc(v.id)}" novalidate>
       <h2>Comprobar pago de Cashea</h2>
-      <p class="muted small">${esc(v.factura)} · ${esc(v.nombre)} ${esc(v.apellido)} · debe llegar ${usd(c.liquidacionUsd)} (${bsTxt(c.liquidacionBsVenta)} a la tasa de venta)</p>
+      <p class="muted small">Fiscal: ${esc(facturaFiscalDe(v))}${facturaCasheaDe(v) ? ` · Cashea: ${esc(facturaCasheaDe(v))}` : ""} · ${esc(v.nombre)} ${esc(v.apellido)} · debe llegar ${usd(c.liquidacionUsd)} (${bsTxt(c.liquidacionBsVenta)} a la tasa de venta)</p>
       <div class="grid-form">
         <label>Bs que llegaron de Cashea *<input name="recibido" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v.liq_recibido_bs, 2))}"></label>
         <label>Tasa BCV del día del pago *<input name="tasa_liq" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v.liq_tasa, 4))}"></label>
@@ -560,6 +566,10 @@ async function guardarComprobarCashea(e) {
   const boton = form.querySelector("[type=submit]");
   boton.disabled = true;
   try {
+    if (typeof asegurarSesion === "function") {
+      const sesion = await asegurarSesion();
+      if (!sesion) throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+    }
     const { error: errorBD } = await sb.from("cashea_ventas").update({
       liq_recibido_bs: R,
       liq_tasa: TL,
@@ -568,9 +578,13 @@ async function guardarComprobarCashea(e) {
     }).eq("id", id);
     if (errorBD) throw errorBD;
     cerrarModal();
-    toast(`Comprobación de ${v.factura} guardada.`);
+    toast(`Comprobación de ${facturaFiscalDe(v)} guardada.`);
     await refrescarCashea();
   } catch (err) {
+    if (typeof esErrorDeSesion === "function" && esErrorDeSesion(err)) {
+      if (typeof salir === "function") await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     error.textContent = err.code === "23514"
       ? "Revisa los datos de la comprobación: la tasa debe ser mayor que cero y la fecha no puede ser anterior a la venta."
       : "No se guardó: " + (err.message || "error");
@@ -613,14 +627,15 @@ function abrirFormCashea(id) {
         ${tiendaFija
           ? `<input type="hidden" name="tienda" value="${tiendaFija}">`
           : `<label>Tienda *<select name="tienda">${opcionesTienda}</select></label>`}
-        <label>Factura *<input name="factura" maxlength="40" autocomplete="off" value="${esc(v ? v.factura : "")}"></label>
         <label>Día *<input name="fecha" type="date" value="${esc(v ? v.fecha : (aplicado ? aplicado.fecha : hoyISO()))}"></label>
+        <label>Factura Fiscal *<input name="factura_fiscal" maxlength="40" autocomplete="off" placeholder="Ej. 0001245" value="${esc(v ? facturaFiscalDe(v) : "")}"></label>
+        <label>Factura Cashea *<input name="factura_cashea" maxlength="40" autocomplete="off" placeholder="Ej. CSH-98412" value="${esc(v ? facturaCasheaDe(v) : "")}"></label>
         <label>Nombre *<input name="nombre" maxlength="60" autocomplete="off" value="${esc(v ? v.nombre : "")}"></label>
         <label>Apellido *<input name="apellido" maxlength="60" autocomplete="off" value="${esc(v ? v.apellido : "")}"></label>
         <label>Cédula *<input name="cedula" maxlength="14" autocomplete="off" placeholder="V-12345678" value="${esc(v && v.cedula ? v.cedula : "")}"></label>
+        <label>Método de pago de la inicial *<select name="metodo_pago"><option value="">Elige…</option>${opcionesMetodo}</select></label>
         <label>Monto total en dólares (USD) *<input name="monto_total_usd" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(v ? v.monto_total_usd : (aplicado && aplicado.monto ? aplicado.monto : ""), 4))}"></label>
         <label>Tasa BCV de la venta *<input name="tasa" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(tasaSugerida, 4))}"></label>
-        <label>Método de pago de la inicial *<select name="metodo_pago"><option value="">Elige…</option>${opcionesMetodo}</select></label>
       </div>
 
       <div class="calc-pct-editor" id="casheaPctEditor" hidden>
@@ -646,7 +661,8 @@ function abrirFormCashea(id) {
   abrirModal();
   pintarFotoFormCashea();
   actualizarResumenCashea($("#formCashea"));
-  $("#formCashea [name=factura]").focus();
+  const primerCampo = $("#formCashea [name=factura_fiscal]");
+  if (primerCampo) primerCampo.focus();
 }
 
 function actualizarResumenCashea(form) {
@@ -735,7 +751,8 @@ function actualizarResumenCashea(form) {
 }
 
 function validarCashea(d, id) {
-  if (!d.factura) return "Escribe el número de factura.";
+  if (!d.factura_fiscal) return "Escribe el número de Factura Fiscal.";
+  if (!d.factura_cashea) return "Escribe el número de Factura Cashea.";
   if (!d.nombre || !d.apellido) return "Escribe el nombre y el apellido.";
   if (!d.fecha) return "Elige el día de la venta.";
   if (!TIENDAS_CASHEA[d.tienda]) return "Elige la tienda de la venta.";
@@ -747,8 +764,11 @@ function validarCashea(d, id) {
   }
   if (!METODOS_PAGO_CASHEA.includes(d.metodo_pago)) return "Elige el método de pago de la inicial.";
   if (mesCerrado(periodoDe(d.fecha))) return `El mes ${periodoDe(d.fecha)} ya está cerrado. Registra la venta con la fecha de un mes abierto.`;
-  if (adm.cashea.some(v => v.id !== id && normaTexto(v.factura) === normaTexto(d.factura))) {
-    return `Ya existe una venta con la factura ${d.factura}.`;
+  if (adm.cashea.some(v => v.id !== id && normaTexto(facturaFiscalDe(v)) === normaTexto(d.factura_fiscal))) {
+    return `Ya existe una venta con la Factura Fiscal ${d.factura_fiscal}.`;
+  }
+  if (adm.cashea.some(v => v.id !== id && facturaCasheaDe(v) && normaTexto(facturaCasheaDe(v)) === normaTexto(d.factura_cashea))) {
+    return `Ya existe una venta con la Factura Cashea ${d.factura_cashea}.`;
   }
   return null;
 }
@@ -758,8 +778,12 @@ async function guardarCashea(e) {
   const id = form.dataset.id || null;
   const error = $("#casheaError");
   const pctElegido = form.pct_inicial ? Number(form.pct_inicial.value) : CASHEA_PCT.inicial;
+  const fFiscal = String((form.factura_fiscal && form.factura_fiscal.value) || "").trim();
+  const fCashea = String((form.factura_cashea && form.factura_cashea.value) || "").trim();
   const d = {
-    factura: String(form.factura.value || "").trim(),
+    factura: fFiscal,
+    factura_fiscal: fFiscal,
+    factura_cashea: fCashea,
     nombre: String(form.nombre.value || "").trim(),
     apellido: String(form.apellido.value || "").trim(),
     fecha: form.fecha.value,
@@ -790,6 +814,13 @@ async function guardarCashea(e) {
   const boton = form.querySelector("[type=submit]");
   boton.disabled = true;
   try {
+    if (typeof asegurarSesion === "function") {
+      const sesion = await asegurarSesion();
+      if (!sesion) throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+    }
+    if (!id && adm.usuaria) {
+      d.registrado_por = adm.usuaria;
+    }
     d.factura_foto = formFactura.path;
     if (formFactura.blob) {
       const jpg = await comprimir(formFactura.blob, 1600);
@@ -798,7 +829,7 @@ async function guardarCashea(e) {
       const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
         contentType: jpg.type || "image/jpeg",
         cacheControl: "3600",
-        upsert: true,
+        upsert: false,
       });
       if (errorFoto) {
         // Respaldo en bucket público 'catalogo' si 'facturas' falla por permisos o configuración
@@ -806,7 +837,7 @@ async function guardarCashea(e) {
         const { error: errResp } = await sb.storage.from("catalogo").upload(rutaRespaldo, jpg, {
           contentType: jpg.type || "image/jpeg",
           cacheControl: "3600",
-          upsert: true,
+          upsert: false,
         });
         if (errResp) throw errorFoto;
         d.factura_foto = sb.storage.from("catalogo").getPublicUrl(rutaRespaldo).data.publicUrl;
@@ -814,10 +845,19 @@ async function guardarCashea(e) {
         d.factura_foto = ruta;
       }
     }
-    const consulta = id
-      ? sb.from("cashea_ventas").update(d).eq("id", id)
-      : sb.from("cashea_ventas").insert(d);
-    const { error: errorBD } = await consulta;
+    const ejecutarGuardado = payload => (id
+      ? sb.from("cashea_ventas").update(payload).eq("id", id)
+      : sb.from("cashea_ventas").insert(payload));
+    let { error: errorBD } = await ejecutarGuardado(d);
+    // Si aún no se corrió la migración SQL v17 de factura_fiscal/factura_cashea, reintenta guardando en "factura" para no bloquear al usuario
+    if (errorBD && /factura_fiscal|factura_cashea/i.test(String(errorBD.message || ""))) {
+      const respaldo = { ...d };
+      delete respaldo.factura_fiscal;
+      delete respaldo.factura_cashea;
+      respaldo.factura = fCashea ? `${fFiscal} / ${fCashea}` : fFiscal;
+      const r2 = await ejecutarGuardado(respaldo);
+      errorBD = r2.error;
+    }
     if (errorBD) throw errorBD;
     if (!id) {
       // La foto ya quedó guardada con la venta: la calculadora ya no la necesita
@@ -828,8 +868,12 @@ async function guardarCashea(e) {
     toast(id ? "Venta actualizada." : "Venta registrada.");
     await refrescarCashea();
   } catch (err) {
+    if (typeof esErrorDeSesion === "function" && esErrorDeSesion(err)) {
+      if (typeof salir === "function") await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     error.textContent = err.code === "23505"
-      ? `Ya existe una venta con la factura ${d.factura}.`
+      ? `Ya existe una venta con esa Factura Fiscal (${d.factura_fiscal}) o Factura Cashea (${d.factura_cashea}).`
       : err.code === "23514"
         ? "Revisa los datos: el monto, la tasa, la cédula y el método deben ser válidos."
         : "No se guardó: " + (err.message || "error");
@@ -843,14 +887,23 @@ async function guardarCashea(e) {
 async function cambiarEstadoCashea(id, estado) {
   const v = adm.cashea.find(x => x.id === id);
   if (!v) return;
-  if (estado === "anulada" && !confirm(`¿Anular la venta ${v.factura}? Quedará como anulada y no se borra.`)) return;
-  if (estado === "cobrada" && !confirm(`¿Marcar cobrada la venta ${v.factura}? Después solo podrás verla en Detalle.`)) return;
+  const etq = facturaFiscalDe(v);
+  if (estado === "anulada" && !confirm(`¿Anular la venta ${etq}? Quedará como anulada y no se borra.`)) return;
+  if (estado === "cobrada" && !confirm(`¿Marcar cobrada la venta ${etq}? Después solo podrás verla en Detalle.`)) return;
   try {
+    if (typeof asegurarSesion === "function") {
+      const sesion = await asegurarSesion();
+      if (!sesion) return;
+    }
     const { error } = await sb.from("cashea_ventas").update({ estado }).eq("id", id);
     if (error) throw error;
-    toast(`Venta ${v.factura}: ${ESTADOS_CASHEA[estado].toLowerCase()}.`);
+    toast(`Venta ${etq}: ${ESTADOS_CASHEA[estado].toLowerCase()}.`);
     await refrescarCashea();
   } catch (err) {
+    if (typeof esErrorDeSesion === "function" && esErrorDeSesion(err)) {
+      if (typeof salir === "function") await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     toast("No se pudo cambiar el estado: " + (err.message || "error"));
   }
 }
@@ -859,7 +912,7 @@ async function cambiarEstadoCashea(id, estado) {
 // Versión simple del Excel de Cashea (se usa solo si ExcelJS no carga)
 function exportarCasheaSimple(filas) {
   try {
-    const cab = ["Factura", "Día", "Tienda", "Nombre", "Apellido", "Cédula", "Método de pago de la inicial",
+    const cab = ["Factura Fiscal", "Factura Cashea", "Día", "Tienda", "Nombre", "Apellido", "Cédula", "Método de pago de la inicial",
       "Monto total USD", "Tasa BCV venta", "% inicial",
       "Inicial USD", "Inicial Bs", "Financiado USD", "% descuentos", "Descuentos USD",
       "Liquidación esperada USD", "Liquidación esperada Bs (tasa venta)",
@@ -869,7 +922,7 @@ function exportarCasheaSimple(filas) {
       const c = calculoCashea(v);
       const r = compararCashea(v);
       return [
-        v.factura, fechaTxt(v.fecha), TIENDAS_CASHEA[v.tienda] || v.tienda || "", v.nombre, v.apellido,
+        facturaFiscalDe(v), facturaCasheaDe(v), fechaTxt(v.fecha), TIENDAS_CASHEA[v.tienda] || v.tienda || "", v.nombre, v.apellido,
         v.cedula || "", v.metodo_pago || "",
         Number(v.monto_total_usd), Number(v.tasa), Number(v.pct_inicial),
         c.inicialUsd, c.inicialBs, c.financiadoUsd, c.pctDescuento, c.descuentoUsd,
