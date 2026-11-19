@@ -1,8 +1,8 @@
-MERCERÍA DE ORIENTE · PANEL DE ADMINISTRACIÓN (versión 16)
+MERCERÍA ORIENTE · PANEL DE ADMINISTRACIÓN (versión 16)
 
 Archivos de esta carpeta:
-  Administracion.html       Panel (menú: Inicio, Calculadora de venta, Catálogo, Cashea total,
-                            Cashea DECOCINTAS, Cashea Mercería de Oriente, Cashea Caracas, Carrusel,
+  index.html                Panel (menú: Inicio, Calculadora de venta, Catálogo, Cashea total,
+                            Mercería Oriente, DECOCINTAS, Caracas, Carrusel,
                             Notas, Cierre de mes)
   admin.js                  Lógica general del panel (login, catálogo, plantillas, notas)
   calculadora.js            Calculadora de venta, IVA 16% y foto de la factura
@@ -64,14 +64,14 @@ Catálogo: importar Excel y subir fotos:
   Al terminar verás la lista de fotos sin producto para renombrarlas y volver a subirlas.
 
 Cashea (ventas):
-- Cada venta pertenece a una tienda: DECOCINTAS, Mercería de Oriente o Caracas.
+- Cada venta pertenece a una tienda: Mercería Oriente, DECOCINTAS o Caracas.
   "Cashea total" muestra las tres y te deja elegir la tienda; cada sección de tienda ya la trae fija.
 - Cada venta pide: foto de la factura (botón "+ Subir foto", de la galería o de la cámara), cédula
   (V, E, J o G seguido de los números) y el método de pago de la inicial: Efectivo USD, Efectivo Bs,
   Pago móvil, Transferencia, Punto de venta, Zelle u Otro.
 - La foto de la factura es obligatoria: si la venta no tiene foto, no se guarda.
 - Detalle: muestra el monto total en USD y en Bs (a la tasa de la venta), y la foto de la factura.
-- Exportar Excel: estando en la pestaña de una tienda (DECOCINTAS, Mercería de Oriente o Caracas), exporta
+- Exportar Excel: estando en la pestaña de una tienda (Mercería Oriente, DECOCINTAS o Caracas), exporta
   solo esa tienda, con el mismo formato del cierre de mes: encabezado azul, totales con fórmula y filtro.
   Respeta el filtro (Pendientes, Cobradas, Anuladas) y la búsqueda que tienes en pantalla. La hoja
   "Resumen" trae los totales de la tienda. En "Cashea total" salen todas las tiendas, cada una en su hoja.

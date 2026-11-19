@@ -1,6 +1,6 @@
 /* =========================================================
    Cierre de mes de Cashea (solo panel de administración).
-   - Totales de cada caja (DECOCINTAS, Mercería de Oriente, Caracas) del mes elegido.
+   - Totales de cada caja (Mercería Oriente, DECOCINTAS, Caracas) del mes elegido.
    - Cierre manual con el botón "Cerrar mes". El cierre automático lo corre la base de
      datos a las 11:59 p. m. del último día (hora de Caracas). Si ya se cerró a mano,
      el automático no hace nada: el manual tiene prioridad.
@@ -11,8 +11,8 @@
    ========================================================= */
 
 const CAJAS_CIERRE = [
+  { clave: "merceria", nombre: "MERCERÍA ORIENTE", hoja: "Mercería Oriente" },
   { clave: "decocintas", nombre: "DECOCINTAS", hoja: "Decocintas" },
-  { clave: "merceria", nombre: "MERCERÍA DE ORIENTE", hoja: "Mercería de Oriente" },
   { clave: "caracas", nombre: "CARACAS", hoja: "Caracas" },
 ];
 const MESES_CIERRE = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -210,7 +210,7 @@ const rellenoXL = argb => ({ type: "pattern", pattern: "solid", fgColor: { argb 
 function encabezadoBloqueXL(ws, periodo, columnas) {
   ws.mergeCells(1, 1, 1, columnas);
   const titulo = ws.getCell(1, 1);
-  titulo.value = "MERCERÍA DE ORIENTE · CASHEA";
+  titulo.value = "MERCERÍA ORIENTE · CASHEA";
   titulo.font = { bold: true, size: 13, color: { argb: XL.blanco } };
   titulo.fill = rellenoXL(XL.azul);
   titulo.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -437,7 +437,7 @@ async function exportarCierre() {
   }
   try {
     const libro = new ExcelJS.Workbook();
-    libro.creator = "Mercería de Oriente";
+    libro.creator = "Mercería Oriente";
     libro.created = new Date();
     const { filas, totales } = resumenCierre(periodo);
     hojaResumenXL(libro, periodo, filas, totales);

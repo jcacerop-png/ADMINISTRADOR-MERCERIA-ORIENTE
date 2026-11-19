@@ -283,7 +283,7 @@ function descargarExcel() {
 
   /* Hoja 1: resumen */
   const filasResumen = [
-    [celda("MERCERÍA DE ORIENTE · REPORTE DE VENTAS")],
+    [celda("MERCERÍA ORIENTE · REPORTE DE VENTAS")],
     [celda("Periodo"), celda(periodo)],
     [celda("Generado"), celda(new Date().toLocaleString("es-VE"))],
     [],

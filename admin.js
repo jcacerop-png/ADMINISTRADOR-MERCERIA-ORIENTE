@@ -17,10 +17,12 @@ const adm = {
   actividad: [],
   notas: [],
   cashea: [],
-  cierres: [],          // meses cerrados de Cashea (cierre_mensuales)
+  cierres: [],          // meses cerrados de Cashea (cierres_mensuales)
   chip: "todos",
+  estado: "todos",      // filtro rápido en Catálogo: todos, publicados, sin-foto, ocultos, agotados, destacados
   q: "",
-  form: null,          // producto abierto en el formulario
+  form: null,           // producto abierto en el formulario
+  subiendoFoto: false,  // bloquea Guardar mientras termina de subir una foto
   plantilla: "maquina", // tipo que se edita en "Editar plantillas"
   tab: "inicio"         // pestaña abierta (para refrescar solo lo que se ve)
 };
@@ -30,21 +32,87 @@ const fotoDe = p => (Array.isArray(p.fotos) && p.fotos[0]) || "";
 const plantillaDe = tipo => adm.tipos.find(t => t.codigo === tipo) || { campos: [], accesorios: [], usos: [] };
 const lineasDe = t => String(t || "").split("\n").map(s => s.trim()).filter(Boolean);
 const fechaHora = iso => new Date(iso).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-const kpi = (titulo, valor) => `<div class="card kpi"><small>${titulo}</small><strong>${valor}</strong></div>`;
+const kpi = (titulo, valor, extra = "") => `<div class="card kpi" ${extra}><small>${titulo}</small><strong>${valor}</strong></div>`;
 const variantesPorDefecto = () => [{ nombre: "Única", stock: 0 }];
 
-/* ---------- Login ---------- */
+/* ---------- Login y animaciones ---------- */
 function actualizarRol() {
-  const dueno = $("#selCuenta").value === "rodolfo019@merceria.com";
-  $("#rolCuenta").textContent = dueno ? "Dueño" : "Administrador";
+  const sel = $("#selCuenta");
+  if (!sel) return;
+  const dueno = sel.value === "rodolfo019@merceria.com";
+  const rol = $("#rolCuenta");
+  if (rol) rol.textContent = dueno ? "Dueño" : "Administrador";
+}
+
+function animarLogoLogin(enfocar = false) {
+  const btn = $("#loginLogoBtn");
+  if (!btn) return;
+  btn.classList.remove("giro-activo");
+  void btn.offsetWidth; // reinicia la animación CSS
+  btn.classList.add("giro-activo");
+  setTimeout(() => btn.classList.remove("giro-activo"), 900);
+  if (enfocar) {
+    const pass = $("#loginPassword");
+    if (pass) pass.focus();
+  }
+}
+
+function actualizarAnimacionPassword() {
+  const pass = $("#loginPassword");
+  const barra = $("#passEnergiaBarra");
+  const puntos = $("#passPuntos");
+  const box = $("#passBox");
+  const logo = $("#loginLogoBtn");
+  if (!pass) return;
+  const n = pass.value.length;
+  const pct = Math.min(100, Math.round((n / 12) * 100));
+  if (barra) {
+    barra.style.width = `${pct}%`;
+    barra.classList.toggle("cargada", n >= 6);
+  }
+  if (puntos) {
+    const cantidad = Math.min(n, 16);
+    puntos.innerHTML = Array.from({ length: cantidad }, (_, i) =>
+      `<span class="pass-punto" style="--i:${i}"></span>`
+    ).join("");
+  }
+  if (box) box.classList.toggle("escribiendo", n > 0);
+  if (logo) {
+    logo.classList.toggle("escribiendo", n > 0);
+    logo.style.setProperty("--angulo-tecla", `${(n * 30) % 360}deg`);
+  }
+}
+
+function alternarVerPassword() {
+  const pass = $("#loginPassword");
+  const btn = $("#btnVerPass");
+  if (!pass) return;
+  const mostrar = pass.type === "password";
+  pass.type = mostrar ? "text" : "password";
+  if (btn) btn.classList.toggle("viendo", mostrar);
+  pass.focus();
 }
 
 function mostrarLogin() {
   $("#app").hidden = true;
   $("#login").hidden = false;
-  $("#loginForm").elements.password.value = "";
+  const portal = $("#loginPortal");
+  if (portal) {
+    portal.hidden = true;
+    portal.classList.remove("activo");
+  }
+  const card = $("#loginCard");
+  if (card) card.classList.remove("saliendo");
+  const form = $("#loginForm");
+  if (form && form.elements.password) {
+    form.elements.password.value = "";
+    form.elements.password.type = "password";
+  }
+  const btnVer = $("#btnVerPass");
+  if (btnVer) btnVer.classList.remove("viendo");
   $("#loginError").hidden = true;
   actualizarRol();
+  actualizarAnimacionPassword();
 }
 
 async function iniciarSesion(e) {
@@ -58,6 +126,7 @@ async function iniciarSesion(e) {
 
   btn.disabled = true;
   error.hidden = true;
+  animarLogoLogin(false);
   try {
     const { error: err } = await sb.auth.signInWithPassword({ email, password });
     if (err) throw err;
@@ -65,15 +134,52 @@ async function iniciarSesion(e) {
   } catch {
     error.textContent = "Contraseña incorrecta.";
     error.hidden = false;
+    form.classList.remove("error-shake");
+    void form.offsetWidth;
+    form.classList.add("error-shake");
+    setTimeout(() => form.classList.remove("error-shake"), 550);
   } finally {
     btn.disabled = false;
   }
 
   if (ok) {
     form.elements.password.value = "";
+    actualizarAnimacionPassword();
     adm.usuaria = CUENTAS[email] || "Administrador";
-    await entrarPanel();
+    await entrarPanelConTransicion();
   }
+}
+
+async function entrarPanelConTransicion() {
+  const portal = $("#loginPortal");
+  const card = $("#loginCard");
+  const saludo = $("#portalSaludo");
+  if (saludo) saludo.textContent = `Bienvenido, ${adm.usuaria}`;
+  if (card) card.classList.add("saliendo");
+  if (portal) {
+    portal.hidden = false;
+    void portal.offsetWidth;
+    portal.classList.add("activo");
+  }
+
+  $("#quien").textContent = `Sesión: ${adm.usuaria}`;
+  suscribir();
+  const promesaCarga = cargar();
+  await new Promise(r => setTimeout(r, 950));
+
+  $("#login").hidden = true;
+  if (portal) {
+    portal.classList.remove("activo");
+    portal.hidden = true;
+  }
+  if (card) card.classList.remove("saliendo");
+  const app = $("#app");
+  app.hidden = false;
+  app.classList.remove("entrada-panel");
+  void app.offsetWidth;
+  app.classList.add("entrada-panel");
+  irA("inicio");
+  await promesaCarga;
 }
 
 async function entrarPanel() {
@@ -100,7 +206,10 @@ async function salir() {
 
 function suscribir() {
   sb.removeAllChannels();
-  const refrescar = () => cargar();
+  const refrescar = () => {
+    if (typeof fm !== "undefined" && fm.subiendo) return;
+    cargar();
+  };
   sb.channel("panel-merceria")
     .on("postgres_changes", { event: "*", schema: "public", table: "productos" }, refrescar)
     .on("postgres_changes", { event: "*", schema: "public", table: "notas" }, refrescar)
@@ -146,7 +255,7 @@ function alEntrarTab(tab) {
 }
 
 // Las cuatro pestañas de Cashea comparten una sola sección (la tienda cambia con la pestaña)
-const VISTA_DE_TAB = { "cashea-decocintas": "cashea", "cashea-merceria": "cashea", "cashea-caracas": "cashea" };
+const VISTA_DE_TAB = { "cashea-merceria": "cashea", "cashea-decocintas": "cashea", "cashea-caracas": "cashea" };
 
 function irA(tab) {
   adm.tab = tab;
@@ -161,13 +270,14 @@ function pintarInicio() {
   const publicados = adm.productos.filter(p => p.activo);
   const sinStock = publicados.filter(p => stockDe(p) === 0).length;
   const sinFoto = adm.productos.filter(p => !fotoDe(p)).length;
+  const ocultos = adm.productos.length - publicados.length;
 
   $("#saludo").textContent = `Hola, ${adm.usuaria}`;
   $("#kpis").innerHTML = [
-    kpi("Publicados", publicados.length),
-    kpi("Sin existencias", sinStock),
-    kpi("Sin foto", sinFoto),
-    kpi("Ocultos", adm.productos.length - publicados.length),
+    kpi("Publicados", publicados.length, 'data-kpi-estado="publicados" title="Ver productos publicados" style="cursor:pointer"'),
+    kpi("Sin existencias", sinStock, 'data-kpi-estado="agotados" title="Ver productos sin existencias" style="cursor:pointer"'),
+    kpi("Sin foto", sinFoto, 'data-kpi-estado="sin-foto" title="Ver productos sin foto" style="cursor:pointer"'),
+    kpi("Ocultos", ocultos, 'data-kpi-estado="ocultos" title="Ver productos ocultos" style="cursor:pointer"'),
   ].join("");
 
   const bajos = [];
@@ -191,9 +301,16 @@ function tarjetaAdm(p) {
   const foto = fotoDe(p);
   return `
   <article class="card prod-adm ${p.activo ? "" : "oculto"}">
-    <div class="foto">${foto ? `<img src="${esc(foto)}" data-zoom="${esc(foto)}" alt="${esc(p.nombre)}">` : `<span class="sin-foto">Sin foto</span>`}</div>
+    <div class="foto">
+      ${foto
+        ? `<img src="${esc(foto)}" data-zoom="${esc(foto)}" alt="${esc(p.nombre)}" loading="lazy">`
+        : `<label class="sin-foto sin-foto-btn btn-file" title="Subir foto rápida a este producto">
+             <span>+ Subir foto</span>
+             <input type="file" accept="image/*" data-foto-rapida="${esc(p.id)}" class="sr">
+           </label>`}
+    </div>
     <div class="cuerpo">
-      <span class="tipo">${esc(CATEGORIAS[p.tipo] || "")}${p.codigo ? ` · ${esc(p.codigo)}` : ""}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
+      <span class="tipo">${esc(CATEGORIAS[p.tipo] || "")}${p.codigo ? ` · <b>${esc(p.codigo)}</b>` : ""}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
       <h3>${esc(p.nombre)}</h3>
       <div class="fila-precio">
         <strong>${usd(p.precio)}</strong>
@@ -201,6 +318,7 @@ function tarjetaAdm(p) {
       </div>
       <div class="acciones-card">
         <button class="btn sm" data-action="editar" data-id="${esc(p.id)}">Editar</button>
+        <label class="btn sm ghost btn-file" style="cursor:pointer" title="Subir y publicar foto">+ Foto<input type="file" accept="image/*" data-foto-rapida="${esc(p.id)}" class="sr"></label>
         <button class="btn sm ghost" data-action="activo" data-id="${esc(p.id)}">${p.activo ? "Ocultar" : "Publicar"}</button>
         <button class="btn sm ghost" data-action="duplicar" data-id="${esc(p.id)}">Duplicar</button>
         <button class="btn sm peligro" data-action="borrar" data-id="${esc(p.id)}">Eliminar</button>
@@ -210,17 +328,53 @@ function tarjetaAdm(p) {
 }
 
 function pintarCatalogo() {
-  $("#chipsAdm").innerHTML = [["todos", "Todos"], ...Object.entries(CATEGORIAS)]
-    .map(([k, l]) => `<button class="chip ${adm.chip === k ? "on" : ""}" data-chip="${k}">${esc(l)}</button>`)
+  const total = adm.productos.length;
+  const nPub = adm.productos.filter(p => p.activo).length;
+  const nSinFoto = adm.productos.filter(p => !fotoDe(p)).length;
+  const nOcultos = total - nPub;
+  const nAgotados = adm.productos.filter(p => stockDe(p) <= 0).length;
+  const nDestacados = adm.productos.filter(p => p.destacado).length;
+
+  const estadoCont = $("#estadoAdm");
+  if (estadoCont) {
+    const estados = [
+      ["todos", `Todos (${total})`],
+      ["publicados", `Publicados (${nPub})`],
+      ["sin-foto", `Sin foto (${nSinFoto})`],
+      ["ocultos", `Ocultos (${nOcultos})`],
+      ["agotados", `Sin stock (${nAgotados})`],
+      ["destacados", `★ Destacados (${nDestacados})`],
+    ];
+    estadoCont.innerHTML = estados
+      .map(([k, l]) => `<button type="button" class="chip sm ${adm.estado === k ? "on" : ""}" data-estado-adm="${k}">${esc(l)}</button>`)
+      .join("");
+  }
+
+  $("#chipsAdm").innerHTML = [["todos", "Todas las categorías"], ...Object.entries(CATEGORIAS)]
+    .map(([k, l]) => `<button type="button" class="chip ${adm.chip === k ? "on" : ""}" data-chip="${k}">${esc(l)}</button>`)
     .join("");
 
-  const q = adm.q.trim().toLowerCase();
+  const q = normaTexto(adm.q);
+  const cumpleEstado = p => {
+    if (adm.estado === "publicados") return !!p.activo;
+    if (adm.estado === "sin-foto") return !fotoDe(p);
+    if (adm.estado === "ocultos") return !p.activo;
+    if (adm.estado === "agotados") return stockDe(p) <= 0;
+    if (adm.estado === "destacados") return !!p.destacado;
+    return true;
+  };
   const lista = adm.productos.filter(p =>
     (adm.chip === "todos" || p.tipo === adm.chip) &&
-    (!q || `${p.nombre} ${CATEGORIAS[p.tipo] || ""}`.toLowerCase().includes(q)));
+    cumpleEstado(p) &&
+    (!q || normaTexto(`${p.nombre} ${p.codigo || ""} ${CATEGORIAS[p.tipo] || ""} ${p.descripcion || ""}`).includes(q)));
+
+  const conteo = $("#conteoAdm");
+  if (conteo) {
+    conteo.textContent = `Mostrando ${lista.length} de ${total} producto(s)`;
+  }
 
   $("#gridAdm").innerHTML = lista.map(tarjetaAdm).join("")
-    || `<p class="muted">Aún no hay productos. Usa “+ Nuevo producto” para empezar.</p>`;
+    || `<p class="muted">No hay productos con este filtro. Prueba cambiando la categoría o el estado.</p>`;
 }
 
 function pintarNotas() {
@@ -280,7 +434,8 @@ function formDesde(p) {
 }
 
 function abrirFormulario(p) {
-  adm.form = p ? formDesde(p) : formNuevo("maquina");
+  const tipoInicial = Object.keys(CATEGORIAS)[0] || "maquina";
+  adm.form = p ? formDesde(p) : formNuevo(CATEGORIAS.maquina ? "maquina" : tipoInicial);
   dibujarFormulario();
   abrirModal();
 }
@@ -312,10 +467,10 @@ function dibujarFormulario() {
             </div>
           </div>`).join("")}
         ${f.fotos.length < MAX_FOTOS
-          ? `<label class="subir">+ Subir fotos<input type="file" id="fotosIn" accept="image/*" multiple class="sr"></label>`
+          ? `<label class="subir btn-file">+ Subir fotos<input type="file" id="fotosIn" accept="image/*" multiple class="sr"></label>`
           : ""}
       </div>
-      <p class="hint">Las fotos se suben en cuanto las eliges.</p>
+      <p class="hint">${adm.subiendoFoto ? "Subiendo foto(s), espera un momento…" : "Las fotos se suben y guardan en cuanto las eliges."}</p>
     </div>
 
     <div class="grid-form">
@@ -386,35 +541,106 @@ function dibujarFormulario() {
 
     <div class="acciones-sheet">
       <button type="button" class="btn ghost" data-cerrar>Cancelar</button>
-      <button class="btn" type="submit">Guardar</button>
+      <button class="btn" type="submit" ${adm.subiendoFoto ? "disabled" : ""}>${adm.subiendoFoto ? "Subiendo foto…" : "Guardar"}</button>
     </div>
   </form>`;
 }
 
 async function subirFotos(files) {
   const f = adm.form;
-  if (!f || !files || !files.length) return;
+  const lista = [...(files || [])];
+  if (!f || !lista.length) return;
   const libres = MAX_FOTOS - f.fotos.length;
   if (libres <= 0) return toast(`Máximo ${MAX_FOTOS} fotos por producto`);
 
-  for (const file of [...files].slice(0, libres)) {
-    if (!file.type.startsWith("image/")) { toast("Solo se pueden subir imágenes"); continue; }
-    if (file.size > 15 * 1024 * 1024) { toast("Esa foto pesa más de 15 MB"); continue; }
+  const teniaFotos = f.fotos.length > 0;
+  adm.subiendoFoto = true;
+  dibujarFormulario();
+  let subidas = 0;
+
+  try {
+    for (const file of lista.slice(0, libres)) {
+      const valida = typeof esArchivoImagen === "function" ? esArchivoImagen(file) : (file.type || "").startsWith("image/");
+      if (!valida) { toast("Solo se pueden subir imágenes (JPG, PNG o WebP)"); continue; }
+      if (file.size > 20 * 1024 * 1024) { toast("Esa foto pesa más de 20 MB"); continue; }
+      try {
+        toast("Subiendo foto…");
+        const blob = await comprimir(file, 1200);
+        const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const ruta = `productos/${uid}.jpg`;
+        const { error } = await sb.storage.from("catalogo").upload(ruta, blob, {
+          contentType: blob.type || "image/jpeg",
+          cacheControl: "31536000",
+          upsert: true,
+        });
+        if (error) throw error;
+        f.fotos.push(sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl);
+        subidas++;
+      } catch (err) {
+        toast("No se pudo subir la foto: " + (err.message || "error"));
+      }
+    }
+
+    if (subidas > 0) {
+      // Si el producto estaba oculto por no tener foto, al agregarle foto se activa automáticamente
+      if (!teniaFotos && f.fotos.length > 0) f.activo = true;
+      // Si el producto ya existe en la base de datos, persiste las fotos de inmediato
+      if (f.id) {
+        const { error: errUpd } = await sb.from("productos")
+          .update({ fotos: f.fotos, activo: f.activo, actualizado_en: new Date().toISOString() })
+          .eq("id", f.id);
+        if (!errUpd) {
+          toast(subidas === 1 ? "Foto subida y guardada ✔" : `${subidas} fotos subidas y guardadas ✔`);
+          await cargar();
+        }
+      } else {
+        toast(subidas === 1 ? "Foto lista ✔" : `${subidas} fotos listas ✔`);
+      }
+    }
+  } finally {
+    adm.subiendoFoto = false;
+    dibujarFormulario();
+  }
+}
+
+// Subida rápida de foto desde la tarjeta del producto en el Catálogo (1 clic)
+async function subirFotoRapida(id, files) {
+  const p = adm.productos.find(x => x.id === id);
+  const lista = [...(files || [])];
+  if (!p || !lista.length) return;
+  const actuales = Array.isArray(p.fotos) ? [...p.fotos] : [];
+  const libres = MAX_FOTOS - actuales.length;
+  if (libres <= 0) return toast(`Este producto ya tiene el máximo de ${MAX_FOTOS} fotos`);
+
+  const nuevas = [];
+  for (const file of lista.slice(0, libres)) {
+    const valida = typeof esArchivoImagen === "function" ? esArchivoImagen(file) : (file.type || "").startsWith("image/");
+    if (!valida) { toast("Elige un archivo de imagen válido"); continue; }
+    if (file.size > 20 * 1024 * 1024) { toast("Esa foto pesa más de 20 MB"); continue; }
     try {
-      toast("Subiendo foto…");
+      toast(`Subiendo foto para ${p.nombre}…`);
       const blob = await comprimir(file, 1200);
-      const ruta = `productos/${crypto.randomUUID()}.jpg`;
+      const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const ruta = `productos/${uid}.jpg`;
       const { error } = await sb.storage.from("catalogo").upload(ruta, blob, {
-        contentType: "image/jpeg",
+        contentType: blob.type || "image/jpeg",
         cacheControl: "31536000",
+        upsert: true,
       });
       if (error) throw error;
-      f.fotos.push(sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl);
+      nuevas.push(sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl);
     } catch (err) {
       toast("No se pudo subir la foto: " + (err.message || "error"));
     }
   }
-  dibujarFormulario();
+  if (!nuevas.length) return;
+
+  const { error } = await sb.from("productos")
+    .update({ fotos: [...actuales, ...nuevas], activo: true, actualizado_en: new Date().toISOString() })
+    .eq("id", p.id);
+  if (error) return toast("No se pudo asociar la foto: " + error.message);
+  toast(`Foto guardada y "${p.nombre}" publicado ✔`);
+  await cargar();
 }
 
 function cambiarTipo(tipo) {
@@ -440,6 +666,7 @@ async function guardarProducto(e) {
   e.preventDefault();
   const f = adm.form;
   if (!f) return;
+  if (adm.subiendoFoto) return toast("Espera a que termine de subir la foto…");
   const btn = $("#formProd [type=submit]");
 
   const nombre = String(f.nombre || "").trim();
@@ -560,7 +787,7 @@ function exportarInventario() {
   const lista = [...adm.productos].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   const PRIMERA = 5; // las cuatro primeras filas son título, fecha, espacio y encabezados
   const filas = [
-    [celda("MERCERÍA DE ORIENTE · INVENTARIO")],
+    [celda("MERCERÍA ORIENTE · INVENTARIO")],
     [celda(`Generado: ${new Date().toLocaleString("es-VE")}`)],
     [],
     ["Producto", "Categoría", "Publicado", "Precio venta (USD)", "Costo (USD)", "Existencias", "Por variante", "Valor a costo (USD)", "Valor a precio (USD)"].map(t => celda(t)),
@@ -696,7 +923,7 @@ async function accion(nombre, el) {
     case "categorias": return abrirCategorias();
     case "exportar": return exportarInventario();
     case "plantillas":
-      adm.plantilla = "maquina";
+      adm.plantilla = Object.keys(CATEGORIAS)[0] || "maquina";
       dibujarPlantillas();
       return abrirModal();
     case "nota-toggle": return alternarNota(id);
@@ -723,6 +950,25 @@ async function accion(nombre, el) {
 /* ---------- Eventos ---------- */
 document.addEventListener("click", (e) => {
   const t = e.target;
+  if (t.closest("#loginLogoBtn")) return animarLogoLogin(true);
+  if (t.closest("#btnVerPass")) return alternarVerPassword();
+  const inicioIr = t.closest("[data-inicio-ir]");
+  if (inicioIr && inicioIr.dataset.inicioIr === "nueva-cashea") {
+    irA("cashea-merceria");
+    if (typeof abrirFormCashea === "function") abrirFormCashea(null);
+    return;
+  }
+  const kpiEstado = t.closest("[data-kpi-estado]");
+  if (kpiEstado) {
+    adm.estado = kpiEstado.dataset.kpiEstado;
+    pintarCatalogo();
+    return irA("catalogo");
+  }
+  const estadoBtn = t.closest("[data-estado-adm]");
+  if (estadoBtn) {
+    adm.estado = estadoBtn.dataset.estadoAdm;
+    return pintarCatalogo();
+  }
   const tab = t.closest("[data-tab]");
   if (tab) return irA(tab.dataset.tab);
   const chip = t.closest("[data-chip]");
@@ -737,6 +983,7 @@ document.addEventListener("click", (e) => {
 // Escribir en el formulario: se guarda en memoria, sin volver a dibujar (no pierde el foco)
 document.addEventListener("input", (e) => {
   const t = e.target;
+  if (t.id === "loginPassword") return actualizarAnimacionPassword();
   if (t.id === "buscarAdm") {
     adm.q = t.value;
     return pintarCatalogo();
@@ -758,8 +1005,21 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", (e) => {
   const t = e.target;
-  if (t.id === "fotosIn") return subirFotos(t.files);
-  if (t.id === "selCuenta") return actualizarRol();
+  if (t.id === "fotosIn") {
+    const archivos = [...(t.files || [])];
+    t.value = "";
+    return subirFotos(archivos);
+  }
+  if (t.dataset && t.dataset.fotoRapida) {
+    const id = t.dataset.fotoRapida;
+    const archivos = [...(t.files || [])];
+    t.value = "";
+    return subirFotoRapida(id, archivos);
+  }
+  if (t.id === "selCuenta") {
+    animarLogoLogin(false);
+    return actualizarRol();
+  }
   if (t.id === "plTipo") {
     adm.plantilla = t.value;
     return dibujarPlantillas();

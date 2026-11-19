@@ -21,7 +21,7 @@ const ANCHOS_VENTAS_XL = [6, 12, 14, 16, 16, 14, 15, 15, 18, 13, 14, 14, 15, 12,
 const COLUMNAS_RESUMEN_XL = ["Tienda", "Ventas", "Anuladas", "Total (US$)", "Inicial (US$)", "Descuentos (US$)", "Liquidación (US$)"];
 const FILTROS_VENTAS_XL = { todas: "Todas", pendiente: "Pendientes", cobrada: "Cobradas", anulada: "Anuladas" };
 
-// Nombre de archivo sin tildes ni espacios: "Mercería de Oriente" → "Merceria_de_Oriente"
+// Nombre de archivo sin tildes ni espacios: "Mercería Oriente" → "Merceria_Oriente"
 const nombreArchivoXL = texto => String(texto)
   .normalize("NFD").replace(/[̀-ͯ]/g, "")
   .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -228,7 +228,7 @@ async function exportarCashea() {
     const filtroTxt = descripcionFiltroXL();
 
     const libro = new ExcelJS.Workbook();
-    libro.creator = "Mercería de Oriente";
+    libro.creator = "Mercería Oriente";
     libro.created = new Date();
     hojaResumenVentasXL(libro, claves, porTienda, filtroTxt);
     claves.forEach(k => hojaVentasTiendaXL(libro, k, porTienda[k], filtroTxt));

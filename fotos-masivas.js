@@ -11,21 +11,72 @@
 
 const fm = { subiendo: false };
 
-// Misma normalización para nombres de archivo y nombres de producto
+// Limpia extensiones de imagen (incluso dobles como .png.png) y sufijos de copia como " (1)" o "- copia"
+const limpiarNombreArchivoFoto = nombre => String(nombre || "")
+  .replace(/(\.(png|jpe?g|jfif|webp|gif|bmp|avif|svg|heic|heif))+$/i, "")
+  .replace(/\s*(\(\d+\)|-\s*copia(\s*\(\d+\))?)$/i, "")
+  .trim();
+
+// Clave exacta (conserva guiones, guiones bajos y puntos para distinguir COR-TRE-5MM de COR_TRE_5MM)
+const claveExactaFoto = s => normaTexto(s).replace(/\s+/g, "");
+// Clave alfanumérica flexible (ignora guiones, espacios y signos)
 const claveFoto = s => normaTexto(s).replace(/[^a-z0-9]/g, "");
+// Clave sin ceros a la izquierda en bloques numéricos (ej. HI-COS-03 ↔ HI-COS-3)
+const claveSinCerosFoto = s => normaTexto(s)
+  .replace(/0+(\d+)/g, "$1")
+  .replace(/[^a-z0-9]/g, "");
 
-const esImagenNombre = nombre => /\.(png|jpe?g|webp|gif)$/i.test(nombre);
+const esImagenNombre = nombre => /\.(png|jpe?g|jfif|webp|gif|bmp|avif|svg|heic|heif)$/i.test(String(nombre || ""));
 
-// Índice de productos por código. Si dos productos comparten la misma clave, se marcan como ambiguos
+// Índice de productos por código exacto, código flexible, código sin ceros y nombre
 function indexarProductosFotos() {
+  const porCodigoExacto = new Map();
   const porCodigo = new Map();
+  const porCodigoSinCeros = new Map();
+  const porNombre = new Map();
+  const agregar = (mapa, clave, p) => {
+    if (!clave) return;
+    if (!mapa.has(clave)) mapa.set(clave, []);
+    mapa.get(clave).push(p);
+  };
   for (const p of adm.productos) {
-    const clave = claveFoto(p.codigo || "");
-    if (!clave) continue;
-    if (!porCodigo.has(clave)) porCodigo.set(clave, []);
-    porCodigo.get(clave).push(p);
+    if (p.codigo) {
+      agregar(porCodigoExacto, claveExactaFoto(p.codigo), p);
+      agregar(porCodigo, claveFoto(p.codigo), p);
+      agregar(porCodigoSinCeros, claveSinCerosFoto(p.codigo), p);
+    }
+    if (p.nombre) {
+      agregar(porNombre, claveFoto(p.nombre), p);
+    }
   }
-  return { porCodigo };
+  return { porCodigoExacto, porCodigo, porCodigoSinCeros, porNombre };
+}
+
+function buscarProductoParaFoto(nombreArchivo, indices) {
+  const base = limpiarNombreArchivoFoto(nombreArchivo);
+  const cExacta = claveExactaFoto(base);
+  const cFlex = claveFoto(base);
+  const cSinCeros = claveSinCerosFoto(base);
+
+  const intentos = [
+    indices.porCodigoExacto.get(cExacta),
+    indices.porCodigo.get(cFlex),
+    indices.porCodigoSinCeros.get(cSinCeros),
+    indices.porNombre.get(cFlex),
+  ];
+
+  for (const lista of intentos) {
+    if (lista && lista.length === 1) return { candidatos: lista };
+  }
+  // Si hay varios candidatos (ej. dos variantes con código similar), prioriza los que aún no tienen foto
+  for (const lista of intentos) {
+    if (lista && lista.length > 1) {
+      const sinFoto = lista.filter(p => !Array.isArray(p.fotos) || p.fotos.length === 0);
+      if (sinFoto.length === 1) return { candidatos: sinFoto };
+      return { candidatos: lista };
+    }
+  }
+  return { candidatos: [] };
 }
 
 // Convierte la selección (imágenes sueltas y/o .zip) en una lista de { nombre, blob }
@@ -33,27 +84,37 @@ async function leerSeleccionFotos(lista) {
   const imagenes = [];
   const avisos = [];
   for (const archivo of lista) {
-    const esZip = /\.zip$/i.test(archivo.name) || /zip/.test(archivo.type || "");
+    const esZip = /\.zip$/i.test(archivo.name) || /zip/i.test(archivo.type || "");
     if (esZip) {
       if (typeof JSZip === "undefined") {
         avisos.push(`No pude leer ${archivo.name}: el lector de .zip no cargó. Revisa tu conexión o sube las fotos sueltas.`);
         continue;
       }
-      const zip = await JSZip.loadAsync(archivo);
-      const entradas = Object.values(zip.files).filter(e => {
-        const base = e.name.split("/").pop();
-        return !e.dir && esImagenNombre(base) && !e.name.startsWith("__MACOSX") && !base.startsWith(".");
-      });
-      for (const entrada of entradas) {
-        const nombre = entrada.name.split("/").pop();
-        const bytes = await entrada.async("uint8array");
-        const tipo = /\.png$/i.test(nombre) ? "image/png" : /\.webp$/i.test(nombre) ? "image/webp" : "image/jpeg";
-        imagenes.push({ nombre, blob: new Blob([bytes], { type: tipo }) });
+      try {
+        const zip = await JSZip.loadAsync(archivo);
+        const entradas = Object.values(zip.files).filter(e => {
+          const base = e.name.split("/").pop();
+          return !e.dir && esImagenNombre(base) && !e.name.startsWith("__MACOSX") && !base.startsWith(".");
+        });
+        for (const entrada of entradas) {
+          const nombre = entrada.name.split("/").pop();
+          const bytes = await entrada.async("uint8array");
+          const tipo = /\.png$/i.test(nombre)
+            ? "image/png"
+            : /\.webp$/i.test(nombre)
+              ? "image/webp"
+              : /\.gif$/i.test(nombre)
+                ? "image/gif"
+                : "image/jpeg";
+          imagenes.push({ nombre, blob: new Blob([bytes], { type: tipo }) });
+        }
+      } catch (err) {
+        avisos.push(`No se pudo descomprimir ${archivo.name}: ${err.message || "archivo dañado"}`);
       }
-    } else if ((archivo.type || "").startsWith("image/") || esImagenNombre(archivo.name)) {
+    } else if ((typeof esArchivoImagen === "function" && esArchivoImagen(archivo)) || (archivo.type || "").startsWith("image/") || esImagenNombre(archivo.name)) {
       imagenes.push({ nombre: archivo.name, blob: archivo });
     } else {
-      avisos.push(`${archivo.name}: no es una imagen (PNG, JPG o WebP)`);
+      avisos.push(`${archivo.name}: no es una imagen válida (PNG, JPG o WebP)`);
     }
   }
   return { imagenes, avisos };
@@ -81,8 +142,8 @@ function resumenFotos(r) {
       ${kpi("Fotos subidas", r.fotosSubidas)}
       ${kpi("Sin producto", r.sinCoincidencia.length)}
     </div>
-    ${lista("Fotos sin producto (renómbralas con el código del producto)", r.sinCoincidencia)}
-    ${lista("Nombre repetido (no se subieron)", r.ambiguos)}
+    ${lista("Fotos sin producto (renómbralas con el código o nombre del producto)", r.sinCoincidencia)}
+    ${lista("Nombre repetido (asociadas a varios productos)", r.ambiguos)}
     ${lista("Productos que ya tenían el máximo de fotos", r.omitidos)}
     ${lista("Errores", r.errores)}
     ${lista("Avisos", r.avisos)}`;
@@ -109,18 +170,19 @@ async function subirFotosMasivas(lista) {
       return toast("No encontré fotos (PNG, JPG o WebP) en la selección");
     }
 
-    // Agrupa cada foto con su producto
-    const { porCodigo } = indexarProductosFotos();
+    // Agrupa cada foto con su(s) producto(s)
+    const indices = indexarProductosFotos();
     const grupos = new Map();
     for (const img of imagenes) {
-      const clave = claveFoto(img.nombre.replace(/\.[^.]+$/, ""));
-      // Solo por código: el nombre de la foto debe ser el código del producto (ej. ACC-M-037.png)
-      const candidatos = porCodigo.get(clave) || [];
+      const { candidatos } = buscarProductoParaFoto(img.nombre, indices);
       if (!candidatos.length) { r.sinCoincidencia.push(img.nombre); continue; }
-      if (candidatos.length > 1) { r.ambiguos.push(img.nombre); continue; }
-      const p = candidatos[0];
-      if (!grupos.has(p.id)) grupos.set(p.id, { producto: p, imagenes: [] });
-      grupos.get(p.id).imagenes.push(img);
+      if (candidatos.length > 1) {
+        r.avisos.push(`${img.nombre}: coincidió con ${candidatos.map(c => c.codigo || c.nombre).join(", ")} y se aplicó a todos.`);
+      }
+      for (const p of candidatos) {
+        if (!grupos.has(p.id)) grupos.set(p.id, { producto: p, imagenes: [] });
+        grupos.get(p.id).imagenes.push(img);
+      }
     }
 
     const total = [...grupos.values()].reduce((a, g) => a + g.imagenes.length, 0);
@@ -136,10 +198,12 @@ async function subirFotosMasivas(lista) {
         estadoFotos(`Subiendo foto ${hechas} de ${total}…`);
         try {
           const blob = await comprimir(img.blob, 1200);
-          const ruta = `productos/${crypto.randomUUID()}.jpg`;
+          const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          const ruta = `productos/${uid}.jpg`;
           const { error } = await sb.storage.from("catalogo").upload(ruta, blob, {
-            contentType: "image/jpeg",
+            contentType: blob.type || "image/jpeg",
             cacheControl: "31536000",
+            upsert: true,
           });
           if (error) throw error;
           nuevas.push(sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl);
@@ -161,7 +225,6 @@ async function subirFotosMasivas(lista) {
     estadoFotos(`Listo: ${r.publicados.length} producto(s) publicados con foto.`);
     resumenFotos(r);
     toast(`${r.publicados.length} producto(s) publicados con foto ✔`);
-    await cargar();
   } catch (err) {
     estadoFotos("No se terminó la subida.");
     r.errores.push(err.message || "error inesperado");
@@ -169,6 +232,7 @@ async function subirFotosMasivas(lista) {
     toast("No se terminó la subida de fotos: " + (err.message || "error"));
   } finally {
     fm.subiendo = false;
+    await cargar();
   }
 }
 
@@ -176,7 +240,7 @@ async function subirFotosMasivas(lista) {
 document.addEventListener("change", (e) => {
   if (e.target.id !== "fotosMasivas") return;
   // Copia la lista antes de vaciar el campo: la selección se pierde si no se copia
-  const lista = [...e.target.files];
+  const lista = [...(e.target.files || [])];
   e.target.value = "";
-  subirFotosMasivas(lista);
+  if (lista.length) subirFotosMasivas(lista);
 });

@@ -10,15 +10,16 @@
 
 const calc = {
   filas: [""],         // precios tal como los escribe la persona (texto)
-  factura: null,       // foto de la factura (archivo), se guarda con la venta de Cashea
+  factura: null,       // foto de la factura (Blob en memoria), se guarda con la venta de Cashea
   tasa: "",            // tasa de cambio (Bs por 1 USD), texto
-  tienda: "decocintas",
+  tienda: "merceria",  // Mercería Oriente siempre de primera por defecto
   fecha: "",           // fecha de venta, AAAA-MM-DD
   metodo: "",          // método de pago de la inicial (lista de METODOS_PAGO_CASHEA)
+  pctInicial: 40,      // porcentaje de inicial preestablecido en 40% (editable)
 };
 
 const IVA_TASA = 0.16; // IVA fijo: siempre se suma
-const TAB_CASHEA_DE = { decocintas: "cashea-decocintas", merceria: "cashea-merceria", caracas: "cashea-caracas" };
+const TAB_CASHEA_DE = { merceria: "cashea-merceria", decocintas: "cashea-decocintas", caracas: "cashea-caracas" };
 
 // Formato venezolano: 16.543,76 (punto para miles, coma para decimales)
 const formatoBs = n => {
@@ -27,20 +28,28 @@ const formatoBs = n => {
   return `${entera.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${decimal}`;
 };
 const formatoUsd = n => `$${(Math.round(n * 100) / 100).toFixed(2)}`;
+const formatoPct = n => {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return Number.isInteger(v) ? String(v) : String(v).replace(".", ",");
+};
 
 const fechaLarga = iso => {
   const [a, m, d] = String(iso || "").split("-");
   return a && m && d ? `${d}/${m}/${a}` : "";
 };
 
-// Suma, IVA (16%, siempre), total y equivalente en Bs con la tasa escrita
+// Suma, IVA (16%, siempre), total, equivalente en Bs e inicial según el porcentaje elegido
 function totalesCalculadora() {
   const suma = Math.round(calc.filas.reduce((a, t) => a + (leerMonto(t, 2) || 0), 0) * 100) / 100;
   const iva = Math.round(suma * IVA_TASA * 100) / 100;
   const total = Math.round((suma + iva) * 100) / 100;
   const tasa = leerMonto(calc.tasa, 2);
-  const bs = tasa && tasa > 0 ? Math.round(total * tasa * 100) / 100 : null;
-  return { suma, iva, total, tasa: tasa && tasa > 0 ? tasa : null, bs };
+  const tasaValida = tasa && tasa > 0 ? tasa : null;
+  const bs = tasaValida ? Math.round(total * tasaValida * 100) / 100 : null;
+  const pctInicial = Math.min(100, Math.max(0, Number(calc.pctInicial ?? 40)));
+  const inicialUsd = Math.round(total * pctInicial) / 100;
+  const inicialBs = tasaValida ? Math.round(inicialUsd * tasaValida * 100) / 100 : null;
+  return { suma, iva, total, tasa: tasaValida, bs, pctInicial, inicialUsd, inicialBs };
 }
 
 // Pinta las filas de precios (solo cuando cambian: agregar, quitar, limpiar)
@@ -58,13 +67,23 @@ function pintarFilasCalc() {
 
 // Actualiza solo los números (no toca los campos que la persona está escribiendo)
 function pintarTotalesCalc() {
-  const { suma, iva, total, bs } = totalesCalculadora();
+  const { suma, iva, total, bs, pctInicial, inicialUsd, inicialBs } = totalesCalculadora();
+  const pctTxt = `${formatoPct(pctInicial)}%`;
   const poner = (id, texto) => { const el = document.getElementById(id); if (el) el.textContent = texto; };
   poner("calcSuma", formatoUsd(suma));
   poner("calcIvaMonto", formatoUsd(iva));
   poner("calcTotal", formatoUsd(total));
   poner("calcUsd", formatoUsd(total));
   poner("calcBs", bs === null ? "Bs —" : `Bs ${formatoBs(bs)}`);
+  poner("calcPctTxt", pctTxt);
+  poner("calcPctBtnTxt", pctTxt);
+  poner("calcIniUsdLbl", `Inicial (${pctTxt}) en USD`);
+  poner("calcIniBsLbl", `Inicial (${pctTxt}) en Bs`);
+  poner("calcIniUsd", formatoUsd(inicialUsd));
+  poner("calcIniBs", inicialBs === null ? "Bs —" : `Bs ${formatoBs(inicialBs)}`);
+  document.querySelectorAll("#calcPctRapidos [data-pct]").forEach(b => {
+    b.classList.toggle("on", Number(b.dataset.pct) === Number(pctInicial));
+  });
 }
 
 // Muestra la foto de la factura elegida, con opción de quitarla
@@ -92,6 +111,8 @@ function pintarConfigCalc() {
       METODOS_PAGO_CASHEA.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
     metodo.value = calc.metodo;
   }
+  const pctInput = document.getElementById("calcPctInput");
+  if (pctInput) pctInput.value = calc.pctInicial;
   pintarEstadoAplicado();
 }
 
@@ -100,7 +121,7 @@ function pintarEstadoAplicado() {
   if (!el) return;
   const a = adm.calcAplicado;
   el.textContent = a
-    ? `Aplicado a la venta Cashea: ${TIENDAS_CASHEA[a.tienda] || ""} · ${fechaLarga(a.fecha)} · 1 USD = ${formatoBs(a.tasa)} Bs`
+    ? `Aplicado a la venta Cashea: ${TIENDAS_CASHEA[a.tienda] || ""} · ${fechaLarga(a.fecha)} · 1 USD = ${formatoBs(a.tasa)} Bs · Inicial ${formatoPct(a.pct_inicial ?? 40)}%`
     : "Todavía no se ha aplicado la tasa ni la tienda.";
 }
 
@@ -124,17 +145,18 @@ async function sincronizarTasaCalc() {
   toast(`Tasa tomada de la última venta: ${calc.tasa} Bs`);
 }
 
-// Pasa tienda, fecha, tasa y foto de la factura a una nueva venta de Cashea y abre ese formulario
+// Pasa tienda, fecha, tasa, porcentaje de inicial y foto de la factura a una nueva venta de Cashea
 function aplicarCalc() {
   const tasa = leerMonto(calc.tasa, 2);
   if (!tasa || tasa <= 0) return toast("Escribe una tasa de cambio válida antes de aplicar.");
   if (!TIENDAS_CASHEA[calc.tienda]) return toast("Elige una tienda.");
-  const { total } = totalesCalculadora();
+  const { total, pctInicial } = totalesCalculadora();
   adm.calcAplicado = {
     tienda: calc.tienda,
     fecha: calc.fecha || hoyISO(),
     tasa,
     monto: total,
+    pct_inicial: pctInicial,
     metodo: calc.metodo || null,
     factura: calc.factura,
   };
@@ -144,23 +166,31 @@ function aplicarCalc() {
   abrirFormCashea(null);
 }
 
-// Vacía toda la calculadora: precios, tasa, tienda, fecha y foto vuelven a su estado inicial
+// Vacía toda la calculadora: precios, tasa, tienda, fecha, porcentaje y foto vuelven a su estado inicial
 function limpiarTodoCalc() {
   calc.filas = [""];
   calc.tasa = "";
-  calc.tienda = "decocintas";
+  calc.tienda = "merceria";
   calc.fecha = hoyISO();
   calc.metodo = "";
+  calc.pctInicial = 40;
   calc.factura = null;
+  const editor = document.getElementById("calcPctEditor");
+  if (editor) editor.hidden = true;
   pintarFilasCalc();
   pintarConfigCalc();
   pintarFotoCalc();
 }
 
-// Borra los precios y el IVA. La tienda, la fecha y la tasa se mantienen
+// Borra los precios y restablece el porcentaje en 40%. La tienda, la fecha y la tasa se mantienen
 function limpiarCalc() {
   calc.filas = [""];
+  calc.pctInicial = 40;
   calc.factura = null;
+  const editor = document.getElementById("calcPctEditor");
+  if (editor) editor.hidden = true;
+  const pctInput = document.getElementById("calcPctInput");
+  if (pctInput) pctInput.value = 40;
   pintarFilasCalc();
   pintarFotoCalc();
   toast("Calculadora limpia");
@@ -174,15 +204,34 @@ document.addEventListener("input", (e) => {
   }
   if (e.target.id === "calcTasa") {
     calc.tasa = e.target.value;
-    pintarTotalesCalc();
+    return pintarTotalesCalc();
+  }
+  if (e.target.id === "calcPctInput") {
+    const limpio = String(e.target.value ?? "").replace(",", ".").trim();
+    if (limpio === "") {
+      calc.pctInicial = 0;
+    } else {
+      const n = Number(limpio);
+      if (!Number.isNaN(n)) calc.pctInicial = Math.min(100, Math.max(0, Math.round(n * 100) / 100));
+    }
+    return pintarTotalesCalc();
   }
 });
 
-document.addEventListener("change", (e) => {
+document.addEventListener("change", async (e) => {
   if (e.target.id === "calcFotoSubir") {
     const archivo = e.target.files && e.target.files[0];
     e.target.value = "";
-    if (archivo) { calc.factura = archivo; pintarFotoCalc(); }
+    if (!archivo) return;
+    if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
+      return toast("El archivo elegido no es una imagen válida.");
+    }
+    try {
+      calc.factura = await comprimir(archivo, 1600);
+      pintarFotoCalc();
+    } catch (err) {
+      toast("No se pudo preparar la foto: " + (err.message || "error"));
+    }
     return;
   }
   if (e.target.id === "calcTienda") calc.tienda = e.target.value;
@@ -206,6 +255,31 @@ document.addEventListener("click", (e) => {
       calc.filas.splice(i, 1);
       if (!calc.filas.length) calc.filas = [""];
       return pintarFilasCalc();
+    }
+    case "pct-toggle": {
+      const editor = document.getElementById("calcPctEditor");
+      if (!editor) return;
+      editor.hidden = !editor.hidden;
+      const input = document.getElementById("calcPctInput");
+      if (!editor.hidden && input) {
+        input.value = calc.pctInicial;
+        input.focus();
+        input.select();
+      }
+      return;
+    }
+    case "pct-set": {
+      const pct = Math.min(100, Math.max(0, Number(boton.dataset.pct ?? 40)));
+      calc.pctInicial = pct;
+      const input = document.getElementById("calcPctInput");
+      if (input) input.value = pct;
+      pintarTotalesCalc();
+      return;
+    }
+    case "pct-cerrar": {
+      const editor = document.getElementById("calcPctEditor");
+      if (editor) editor.hidden = true;
+      return;
     }
     case "quitar-foto": calc.factura = null; return pintarFotoCalc();
     case "sync": return sincronizarTasaCalc();

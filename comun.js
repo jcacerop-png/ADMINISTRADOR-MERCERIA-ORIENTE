@@ -61,26 +61,85 @@ function alternarTema() {
   aplicarTema(document.documentElement.dataset.theme === "oscuro" ? "claro" : "oscuro");
 }
 
-/* ---------- Reducir fotos del celular antes de subirlas ---------- */
-function comprimir(file, max = 1000) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * s);
-      c.height = Math.round(img.height * s);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      c.toBlob(b => (b ? resolve(b) : reject(new Error("No se pudo procesar la foto"))), "image/jpeg", 0.86);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Imagen no válida"));
-    };
-    img.src = url;
+/* ---------- Validar y reducir fotos antes de subirlas ---------- */
+const EXTENSIONES_IMAGEN = /\.(png|jpe?g|jfif|webp|gif|bmp|avif|svg|heic|heif)$/i;
+
+function esArchivoImagen(file) {
+  if (!file) return false;
+  const tipo = String(file.type || "").toLowerCase();
+  const nombre = String(file.name || "");
+  return tipo.startsWith("image/") || EXTENSIONES_IMAGEN.test(nombre);
+}
+
+function uuidSeguro() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
   });
+}
+
+function dibujarEnCanvas(fuente, w, h, max) {
+  const s = Math.min(1, max / Math.max(w, h, 1));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * s));
+  c.height = Math.max(1, Math.round(h * s));
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("No se pudo iniciar el procesador de imagen");
+  // Fondo blanco para que los PNG o WebP con transparencia no queden con fondo negro al pasar a JPEG
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(fuente, 0, 0, c.width, c.height);
+  return new Promise((resolve, reject) => {
+    c.toBlob(b => {
+      c.width = 0;
+      c.height = 0;
+      if (b) resolve(b);
+      else reject(new Error("No se pudo procesar la foto"));
+    }, "image/jpeg", 0.86);
+  });
+}
+
+async function comprimir(file, max = 1000) {
+  if (!file) throw new Error("No se seleccionó ninguna imagen");
+  // 1) Intento principal con Image + ObjectURL
+  try {
+    return await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        URL.revokeObjectURL(url);
+        if (!w || !h) return reject(new Error("Dimensiones de imagen no válidas"));
+        dibujarEnCanvas(img, w, h, max).then(resolve, reject);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("No se pudo decodificar la imagen"));
+      };
+      img.src = url;
+    });
+  } catch (err1) {
+    // 2) Segundo intento con createImageBitmap (soporta más variantes en navegadores modernos)
+    if (typeof createImageBitmap === "function") {
+      try {
+        const bmp = await createImageBitmap(file);
+        const blob = await dibujarEnCanvas(bmp, bmp.width, bmp.height, max);
+        if (typeof bmp.close === "function") bmp.close();
+        return blob;
+      } catch { /* continúa al respaldo */ }
+    }
+    // 3) Respaldo: si ya es un archivo de imagen válido, copia sus bytes en memoria para no fallar la subida
+    if (esArchivoImagen(file) && file.size > 0 && file.size <= 25 * 1024 * 1024) {
+      const buffer = await file.arrayBuffer();
+      return new Blob([buffer], { type: file.type && file.type.startsWith("image/") ? file.type : "image/jpeg" });
+    }
+    throw new Error(err1 && err1.message ? err1.message : "Imagen no válida");
+  }
 }
 
 /* ---------- Visor de foto grande: tocar la foto para acercarla ---------- */

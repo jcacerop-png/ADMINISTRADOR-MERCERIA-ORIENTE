@@ -1,14 +1,15 @@
 /* =========================================================
    Ventas por Cashea Express (solo panel de administración).
    Modelo:
-   - Inicial 40%: la clienta la paga en caja, en bolívares a la tasa BCV de la venta.
-   - Financiado: el resto. Cashea lo debe al comercio.
-   - Cashea descuenta el 8% del monto total: 4% servicio tecnológico + 4% adelanto.
-   - Liquidación esperada (USD) = financiado − descuentos.
+   - Inicial (40% por defecto, editable a cualquier porcentaje): la clienta la paga
+     en caja, en dólares o bolívares a la tasa BCV de la venta.
+   - Financiado: el porcentaje restante (ej. 60%). Cashea lo debe al comercio.
+   - Cashea descuenta el 8% del monto total: 4% pronto pago + 4% uso de plataforma.
+   - Liquidación esperada (USD y Bs) = financiado − descuentos.
    - Comprobación: cuando llega el pago de Cashea se anota lo recibido en bolívares,
      la tasa BCV de ese día y la fecha. La app separa la diferencia en la variación
      por tasa BCV y el descuento de más o de menos de Cashea.
-   - Cada venta pertenece a una tienda (DECOCINTAS, Mercería de Oriente o Caracas).
+   - Cada venta pertenece a una tienda (Mercería Oriente, DECOCINTAS o Caracas).
      "Cashea total" muestra las tres; cada tienda tiene su propia sección.
    - Cada venta guarda cédula y método de pago de la inicial.
    - Una venta cobrada o anulada solo muestra Detalle.
@@ -17,12 +18,12 @@
    ========================================================= */
 
 const ESTADOS_CASHEA = { pendiente: "Pendiente", cobrada: "Cobrada", anulada: "Anulada" };
-const CASHEA_PCT = { inicial: 40, comision: 4, adelanto: 4 }; // valores de cada venta nueva (%)
+const CASHEA_PCT = { inicial: 40, comision: 4, adelanto: 4 }; // valores por defecto de cada venta nueva (%)
 const CASHEA_TOLERANCIA_USD = 0.5; // una diferencia menor a esto se considera "cuadra"
 const RESULTADO_CASHEA = { cuadra: "Cuadra", mas: "Le descontó de más", menos: "Le descontó de menos", sin: "Sin comprobar" };
-const TIENDAS_CASHEA = { decocintas: "DECOCINTAS", merceria: "Mercería de Oriente", caracas: "Caracas" };
+const TIENDAS_CASHEA = { merceria: "Mercería Oriente", decocintas: "DECOCINTAS", caracas: "Caracas" };
 const METODOS_PAGO_CASHEA = ["Efectivo USD", "Efectivo Bs", "Pago móvil", "Transferencia", "Punto de venta", "Biopago", "Zelle", "Otro"];
-const TAB_TIENDA_CASHEA = { cashea: "todas", "cashea-decocintas": "decocintas", "cashea-merceria": "merceria", "cashea-caracas": "caracas" };
+const TAB_TIENDA_CASHEA = { cashea: "todas", "cashea-merceria": "merceria", "cashea-decocintas": "decocintas", "cashea-caracas": "caracas" };
 const vistaCashea = { filtro: "todas", q: "", tienda: "todas" }; // solo lo que se ve en pantalla
 
 // Números en formato venezolano: 1.250,50
@@ -34,6 +35,10 @@ const bsTxt = n => "Bs " + numeroVE(n);
 const signoBs = n => (n > 0 ? "+" : n < 0 ? "−" : "") + bsTxt(Math.abs(n));
 const signoUsd = n => (n > 0 ? "+" : n < 0 ? "−" : "") + usd(Math.abs(n));
 const redondeo2 = n => Math.round((Number(n) || 0) * 100) / 100;
+const pctTexto = n => {
+  const v = redondeo2(n);
+  return Number.isInteger(v) ? String(v) : String(v).replace(".", ",");
+};
 
 // Acepta "1.250,50", "1250,5", "1250.5" y "1.250". Devuelve número o null si no es válido.
 function leerMonto(v, decimales = 2) {
@@ -83,21 +88,35 @@ const mesCerrado = periodo => (adm.cierres || []).some(c => c.periodo === period
 function calculoCashea(v) {
   const total = Number(v.monto_total_usd) || 0;
   const tasa = Number(v.tasa) || 0;
-  const pIni = v.pct_inicial ?? CASHEA_PCT.inicial;
-  const pCom = v.pct_comision ?? CASHEA_PCT.comision;
-  const pAde = v.pct_adelanto ?? CASHEA_PCT.adelanto;
-  const inicialUsd = redondeo2(total * Number(pIni) / 100);
+  const pIni = Math.min(100, Math.max(0, Number(v.pct_inicial ?? CASHEA_PCT.inicial)));
+  const pCom = Number(v.pct_comision ?? CASHEA_PCT.comision);
+  const pAde = Number(v.pct_adelanto ?? CASHEA_PCT.adelanto);
+  const pFin = redondeo2(100 - pIni);
+  const totalBs = redondeo2(total * tasa);
+  const inicialUsd = redondeo2(total * pIni / 100);
+  const inicialBs = redondeo2(tasa * inicialUsd);
   const financiadoUsd = redondeo2(total - inicialUsd);
-  const descuentoUsd = redondeo2(redondeo2(total * Number(pCom) / 100) + redondeo2(total * Number(pAde) / 100));
+  const financiadoBs = redondeo2(tasa * financiadoUsd);
+  const descuentoUsd = redondeo2(redondeo2(total * pCom / 100) + redondeo2(total * pAde / 100));
+  const descuentoBs = redondeo2(tasa * descuentoUsd);
   const liquidacionUsd = redondeo2(financiadoUsd - descuentoUsd);
+  const liquidacionBsVenta = redondeo2(tasa * liquidacionUsd);
   return {
+    totalUsd: total,
+    totalBs,
+    pctInicial: pIni,
+    pctFinanciado: pFin,
+    pctComision: pCom,
+    pctAdelanto: pAde,
     inicialUsd,
-    inicialBs: redondeo2(tasa * inicialUsd),
+    inicialBs,
     financiadoUsd,
+    financiadoBs,
     descuentoUsd,
-    pctDescuento: Number(pCom) + Number(pAde),
+    descuentoBs,
+    pctDescuento: pCom + pAde,
     liquidacionUsd,
-    liquidacionBsVenta: redondeo2(tasa * liquidacionUsd),
+    liquidacionBsVenta,
   };
 }
 
@@ -188,7 +207,7 @@ function pintarCashea() {
   const delMes = todas.filter(x => x.r && esDelMesActual(x.v.liq_fecha));
   const conDif = todas.filter(x => x.r && x.r.estado !== "cuadra" && x.v.estado !== "anulada");
 
-  const titulo = vistaCashea.tienda === "todas" ? "Cashea total" : `Cashea ${TIENDAS_CASHEA[vistaCashea.tienda]}`;
+  const titulo = vistaCashea.tienda === "todas" ? "Cashea total" : TIENDAS_CASHEA[vistaCashea.tienda];
   $("#casheaTitulo").textContent = titulo;
 
   $("#casheaKpis").innerHTML = [
@@ -245,9 +264,9 @@ function filaCashea(v, c, r, mostrarTienda) {
     ${mostrarTienda ? `<td><span class="pill-tienda">${esc(TIENDAS_CASHEA[v.tienda] || v.tienda)}</span></td>` : ""}
     <td>${esc(v.nombre)} ${esc(v.apellido)}</td>
     <td>${esc(v.cedula || "—")}</td>
-    <td>${usd(v.monto_total_usd)}</td>
-    <td>${usd(c.inicialUsd)}<br><small class="muted">${bsTxt(c.inicialBs)}</small></td>
-    <td>${usd(c.financiadoUsd)}</td>
+    <td>${usd(v.monto_total_usd)}<br><small class="muted">${bsTxt(c.totalBs)}</small></td>
+    <td>${usd(c.inicialUsd)} <small class="muted">(${pctTexto(c.pctInicial)}%)</small><br><small class="muted">${bsTxt(c.inicialBs)}</small></td>
+    <td>${usd(c.financiadoUsd)} <small class="muted">(${pctTexto(c.pctFinanciado)}%)</small><br><small class="muted">${bsTxt(c.financiadoBs)}</small></td>
     <td><strong>${usd(c.liquidacionUsd)}</strong><br><small class="muted">${bsTxt(c.liquidacionBsVenta)}</small></td>
     <td>${celdaPagoCashea(r)}<br>${pillCompCashea(v)}</td>
     <td><span class="pill-estado ${esc(v.estado)}">${ESTADOS_CASHEA[v.estado] || esc(v.estado)}</span></td>
@@ -265,8 +284,9 @@ function tarjetaCashea(v, c, r, mostrarTienda) {
     </header>
     <p class="cs-cliente">${esc(v.nombre)} ${esc(v.apellido)}${v.cedula ? ` · <small class="muted">${esc(v.cedula)}</small>` : ""}</p>
     <dl class="cs-datos">
-      <div><dt>Total</dt><dd>${usd(v.monto_total_usd)}</dd></div>
-      <div><dt>Inicial en caja (${Number(v.pct_inicial)}%)</dt><dd>${usd(c.inicialUsd)}</dd><dd class="sub">${bsTxt(c.inicialBs)}</dd></div>
+      <div><dt>Total</dt><dd>${usd(v.monto_total_usd)}</dd><dd class="sub">${bsTxt(c.totalBs)}</dd></div>
+      <div><dt>Inicial en caja (${pctTexto(c.pctInicial)}%)</dt><dd>${usd(c.inicialUsd)}</dd><dd class="sub">${bsTxt(c.inicialBs)}</dd></div>
+      <div><dt>Financiado (${pctTexto(c.pctFinanciado)}%)</dt><dd>${usd(c.financiadoUsd)}</dd><dd class="sub">${bsTxt(c.financiadoBs)}</dd></div>
       <div><dt>Liquidación esperada</dt><dd>${usd(c.liquidacionUsd)}</dd><dd class="sub">${bsTxt(c.liquidacionBsVenta)}</dd></div>
       <div><dt>Pago de Cashea</dt><dd>${r ? bsTxt(r.recibidoBs) : "Sin comprobar"}</dd><dd class="sub">${pillCompCashea(v)}</dd></div>
     </dl>
@@ -274,14 +294,22 @@ function tarjetaCashea(v, c, r, mostrarTienda) {
   </article>`;
 }
 
-/* ---------- Detalle (cualquier estado) ---------- */
+/* ---------- Detalle (cualquier estado, organizado por bloques claros) ---------- */
 function abrirDetalleCashea(id) {
   const v = adm.cashea.find(x => x.id === id);
   if (!v) return toast("No encontré esa venta.");
   const c = calculoCashea(v);
   const r = compararCashea(v);
   const fila = (titulo, valor) => `<div><dt>${titulo}</dt><dd>${valor}</dd></div>`;
+  const pctIni = pctTexto(c.pctInicial);
+  const pctFin = pctTexto(c.pctFinanciado);
   const bloqueComp = r ? `
+    <div class="cs-bloque">
+      <div class="cs-bloque-cab">
+        <span class="cs-bloque-titulo">3. Comprobación del pago recibido de Cashea</span>
+        ${pillCompCashea(v)}
+      </div>
+      <dl class="det-lista">
         ${fila("Fecha del pago", esc(fechaTxt(v.liq_fecha)))}
         ${fila("Recibido de Cashea", `${bsTxt(r.recibidoBs)} a tasa ${numeroVE(r.tasaLiq)}`)}
         ${fila("Esperado (tasa de venta)", bsTxt(r.esperadoBs))}
@@ -291,8 +319,16 @@ function abrirDetalleCashea(id) {
         ${fila("Descuento real", `${usd(r.descuentoRealUsd)} (${numeroVE(r.descuentoRealPct)}%) · esperado ${usd(c.descuentoUsd)} (${numeroVE(c.pctDescuento)}%)`)}
         ${fila("Resultado", `${RESULTADO_CASHEA[r.estado]} (${signoUsd(r.diferenciaUsd)})`)}
         ${v.liq_nota ? fila("Nota", esc(v.liq_nota)) : ""}
-        ${v.liq_comprobado_por ? fila("Comprobada por", esc(v.liq_comprobado_por) + (v.liq_comprobado_en ? ` · ${esc(fechaHoraTxt(v.liq_comprobado_en))}` : "")) : ""}`
-    : fila("Pago de Cashea", "Sin comprobar");
+        ${v.liq_comprobado_por ? fila("Comprobada por", esc(v.liq_comprobado_por) + (v.liq_comprobado_en ? ` · ${esc(fechaHoraTxt(v.liq_comprobado_en))}` : "")) : ""}
+      </dl>
+    </div>`
+    : `<div class="cs-bloque">
+        <div class="cs-bloque-cab">
+          <span class="cs-bloque-titulo">3. Comprobación del pago de Cashea</span>
+          ${pillCompCashea(v)}
+        </div>
+        <p class="muted small" style="margin:4px 0 0">Aún no se ha registrado la comprobación del pago de Cashea.</p>
+      </div>`;
   const acciones = v.estado === "pendiente"
     ? `<button type="button" class="btn" data-cashea="comprobar" data-id="${esc(v.id)}">Comprobar</button>
        ${mesCerrado(periodoDe(v.fecha)) ? "" : `<button type="button" class="btn ghost" data-cashea="editar" data-id="${esc(v.id)}">Editar</button>`}`
@@ -308,14 +344,79 @@ function abrirDetalleCashea(id) {
         ${fila("Cliente", esc(`${v.nombre} ${v.apellido}`))}
         ${fila("Cédula", esc(v.cedula || "Sin registrar"))}
         ${fila("Día de la venta", esc(fechaTxt(v.fecha)))}
-        ${fila("Monto total", `${usd(v.monto_total_usd)} · ${bsTxt(Number(v.monto_total_usd) * Number(v.tasa))} a la tasa de venta`)}
-        ${fila("Tasa BCV de la venta", numeroVE(v.tasa))}
+        ${fila("Tasa BCV de la venta", `1 USD = ${numeroVE(v.tasa)} Bs`)}
         ${fila("Método de pago de la inicial", esc(v.metodo_pago || "Sin registrar"))}
-        ${fila(`Inicial en caja (${Number(v.pct_inicial)}%)`, `${usd(c.inicialUsd)} · ${bsTxt(c.inicialBs)}`)}
-        ${fila("Financiado (lo debe Cashea)", usd(c.financiadoUsd))}
-        ${fila(`Descuentos Cashea (${Number(v.pct_comision)}% servicio + ${Number(v.pct_adelanto)}% adelanto)`, `−${usd(c.descuentoUsd)}`)}
-        ${fila("Liquidación esperada", `${usd(c.liquidacionUsd)} · ${bsTxt(c.liquidacionBsVenta)} a la tasa de venta`)}
+      </dl>
+
+      <div class="cs-bloques" style="margin-top:12px">
+        <div class="cs-bloque cs-bloque-inicial">
+          <div class="cs-bloque-cab">
+            <span class="cs-bloque-titulo">1. Cobro en caja · Inicial (${pctIni}%)</span>
+            <span class="cs-pct-chip">${pctIni}% en caja</span>
+          </div>
+          <div class="cs-fila-doble">
+            <div class="cs-concepto">
+              <strong>Monto total de la venta</strong>
+              <small>100% de la factura a tasa ${numeroVE(v.tasa)} Bs</small>
+            </div>
+            <div class="cs-montos">
+              <span class="cs-usd">${usd(c.totalUsd)}</span>
+              <span class="cs-bs">${bsTxt(c.totalBs)}</span>
+            </div>
+          </div>
+          <div class="cs-fila-doble destacada">
+            <div class="cs-concepto">
+              <strong>Inicial a pagar en caja (${pctIni}%)</strong>
+              <small>Monto cobrado al cliente en tienda</small>
+            </div>
+            <div class="cs-montos">
+              <span class="cs-usd">${usd(c.inicialUsd)}</span>
+              <span class="cs-bs">${bsTxt(c.inicialBs)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cs-bloque cs-bloque-financiado">
+          <div class="cs-bloque-cab">
+            <span class="cs-bloque-titulo">2. Financiamiento y liquidación Cashea (${pctFin}%)</span>
+            <span class="cs-pct-chip">Restante ${pctFin}%</span>
+          </div>
+          <div class="cs-fila-doble">
+            <div class="cs-concepto">
+              <strong>Monto financiado (${pctFin}%)</strong>
+              <small>Lo que queda financiado por Cashea</small>
+            </div>
+            <div class="cs-montos">
+              <span class="cs-usd">${usd(c.financiadoUsd)}</span>
+              <span class="cs-bs">${bsTxt(c.financiadoBs)}</span>
+            </div>
+          </div>
+          <div class="cs-fila-doble descuento">
+            <div class="cs-concepto">
+              <strong>Descuento Cashea (${pctTexto(c.pctDescuento)}%)</strong>
+              <small>${pctTexto(c.pctAdelanto)}% pronto pago + ${pctTexto(c.pctComision)}% uso de plataforma</small>
+            </div>
+            <div class="cs-montos">
+              <span class="cs-usd">−${usd(c.descuentoUsd)}</span>
+              <span class="cs-bs">−${bsTxt(c.descuentoBs)}</span>
+            </div>
+          </div>
+          <div class="cs-fila-doble liquidacion">
+            <div class="cs-concepto">
+              <strong>Liquidación esperada</strong>
+              <small>Monto neto a recibir de Cashea (a tasa de venta)</small>
+            </div>
+            <div class="cs-montos">
+              <span class="cs-usd">${usd(c.liquidacionUsd)}</span>
+              <span class="cs-bs">${bsTxt(c.liquidacionBsVenta)}</span>
+            </div>
+          </div>
+        </div>
+
         ${bloqueComp}
+      </div>
+
+      <dl class="det-lista" style="margin-top:12px">
         ${v.cobrada_en ? fila("Cobrada el", esc(fechaHoraTxt(v.cobrada_en))) : ""}
         ${v.anulada_en ? fila("Anulada el", esc(fechaHoraTxt(v.anulada_en))) : ""}
         ${fila("Registrada por", esc(v.registrado_por || "—") + (v.creado_en ? ` · ${esc(fechaHoraTxt(v.creado_en))}` : ""))}
@@ -332,10 +433,12 @@ function abrirDetalleCashea(id) {
 }
 
 /* ---------- Foto de la factura ---------- */
-// Foto de la factura del formulario abierto: blob (nueva, sin subir) o ruta (ya guardada)
+// Foto de la factura del formulario abierto: blob (nueva, ya comprimida en memoria) o path (ya guardada)
 let formFactura = { blob: null, path: null };
 
 async function urlFotoFactura(ruta) {
+  if (!ruta) throw new Error("sin ruta");
+  if (/^https?:\/\//i.test(ruta)) return ruta;
   const { data, error } = await sb.storage.from("facturas").createSignedUrl(ruta, 3600);
   if (error || !data || !data.signedUrl) throw new Error(error ? error.message : "sin enlace");
   return data.signedUrl;
@@ -346,8 +449,10 @@ async function pintarFotoFormCashea() {
   const caja = document.getElementById("casheaFoto");
   if (!caja) return;
   let vista = `<p class="muted small">Todavía no hay foto de la factura.</p>`;
+  let btnQuitar = "";
   if (formFactura.blob) {
     vista = `<div class="foto-factura-marco"><img src="${URL.createObjectURL(formFactura.blob)}" alt="Foto de la factura"></div>`;
+    btnQuitar = `<button type="button" class="btn ghost sm" data-cashea="quitar-foto">Quitar foto</button>`;
   } else if (formFactura.path) {
     try {
       vista = `<div class="foto-factura-marco"><img src="${esc(await urlFotoFactura(formFactura.path))}" alt="Foto de la factura"></div>`;
@@ -358,7 +463,10 @@ async function pintarFotoFormCashea() {
   caja.innerHTML = `
     <div class="factura-cab">
       <span class="factura-titulo">Foto de la factura *</span>
-      <label class="btn sm" style="cursor:pointer">+ Subir foto<input type="file" id="casheaFotoSubir" accept="image/*" class="sr"></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${btnQuitar}
+        <label class="btn sm btn-file" style="cursor:pointer">+ Subir foto<input type="file" id="casheaFotoSubir" accept="image/*" class="sr"></label>
+      </div>
     </div>
     ${vista}`;
 }
@@ -479,11 +587,17 @@ function abrirFormCashea(id) {
   if (v && v.estado !== "pendiente") return toast("Solo se editan las ventas pendientes.");
   if (v && mesCerrado(periodoDe(v.fecha))) return toast("Ese mes ya está cerrado: esta venta no se puede editar.");
   // La tasa sugerida es la de la venta más reciente (se puede cambiar)
-  const aplicado = !v ? adm.calcAplicado : null; // tasa, tienda y fecha que vienen de la calculadora
+  const aplicado = !v ? adm.calcAplicado : null; // tasa, tienda, fecha y % inicial que vienen de la calculadora
   const tasaSugerida = v ? v.tasa : (aplicado ? aplicado.tasa : (adm.cashea[0] ? adm.cashea[0].tasa : ""));
   const tiendaFija = vistaCashea.tienda !== "todas" ? vistaCashea.tienda : null;
+  // Mercería Oriente siempre está de primera y seleccionada por defecto
+  const tiendaSeleccionada = v ? v.tienda : (aplicado && aplicado.tienda ? aplicado.tienda : "merceria");
   const opcionesTienda = Object.entries(TIENDAS_CASHEA)
-    .map(([k, n]) => `<option value="${k}" ${k === (v ? v.tienda : (aplicado ? aplicado.tienda : "")) ? "selected" : ""}>${esc(n)}</option>`).join("");
+    .map(([k, n]) => `<option value="${k}" ${k === tiendaSeleccionada ? "selected" : ""}>${esc(n)}</option>`).join("");
+  // Porcentaje de inicial: 40% por defecto, o el que viene de la calculadora o de la venta editada
+  const pctInicial = v
+    ? Number(v.pct_inicial ?? CASHEA_PCT.inicial)
+    : (aplicado && aplicado.pct_inicial !== undefined ? Number(aplicado.pct_inicial) : CASHEA_PCT.inicial);
   // Foto de la factura: la que llega desde la calculadora, o la que ya tiene la venta
   formFactura = { blob: aplicado && aplicado.factura ? aplicado.factura : null, path: v ? v.factura_foto || null : null };
   const metodoInicial = v ? v.metodo_pago : (aplicado ? aplicado.metodo : "");
@@ -494,10 +608,11 @@ function abrirFormCashea(id) {
     <form id="formCashea" class="form-cashea" data-id="${v ? esc(v.id) : ""}" novalidate>
       <h2>${v ? "Editar venta Cashea" : "Nueva venta Cashea"}</h2>
       ${tiendaFija ? `<p class="muted small">Tienda: <b>${esc(TIENDAS_CASHEA[tiendaFija])}</b></p>` : ""}
+      <input type="hidden" name="pct_inicial" value="${esc(String(pctInicial))}">
       <div class="grid-form">
         ${tiendaFija
           ? `<input type="hidden" name="tienda" value="${tiendaFija}">`
-          : `<label>Tienda *<select name="tienda"><option value="">Elige la tienda…</option>${opcionesTienda}</select></label>`}
+          : `<label>Tienda *<select name="tienda">${opcionesTienda}</select></label>`}
         <label>Factura *<input name="factura" maxlength="40" autocomplete="off" value="${esc(v ? v.factura : "")}"></label>
         <label>Día *<input name="fecha" type="date" value="${esc(v ? v.fecha : (aplicado ? aplicado.fecha : hoyISO()))}"></label>
         <label>Nombre *<input name="nombre" maxlength="60" autocomplete="off" value="${esc(v ? v.nombre : "")}"></label>
@@ -507,8 +622,19 @@ function abrirFormCashea(id) {
         <label>Tasa BCV de la venta *<input name="tasa" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(campoNumero(tasaSugerida, 4))}"></label>
         <label>Método de pago de la inicial *<select name="metodo_pago"><option value="">Elige…</option>${opcionesMetodo}</select></label>
       </div>
-      <p class="muted small">Inicial ${CASHEA_PCT.inicial}% en caja. Cashea descuenta ${CASHEA_PCT.comision}% servicio + ${CASHEA_PCT.adelanto}% adelanto.</p>
-      <div class="cs-calc" id="casheaCalc" aria-live="polite"></div>
+
+      <div class="calc-pct-editor" id="casheaPctEditor" hidden>
+        <div class="calc-pct-rapidos" id="casheaPctRapidos">
+          ${[40, 50, 60, 30, 20, 5, 0].map(p => `<button type="button" class="chip sm ${Number(pctInicial) === p ? "on" : ""}" data-cashea="pct-set" data-pct="${p}">${p}%</button>`).join("")}
+        </div>
+        <div class="calc-pct-personal">
+          <label for="casheaPctInput" class="muted small">Otro % de inicial:</label>
+          <input id="casheaPctInput" class="input sm" type="number" min="0" max="100" step="1" inputmode="decimal" value="${esc(String(pctInicial))}" style="width:90px">
+          <button type="button" class="btn sm" data-cashea="pct-cerrar">Listo</button>
+        </div>
+      </div>
+
+      <div class="cs-calc cs-calc-bloques" id="casheaCalc" aria-live="polite"></div>
       <div class="factura-campo" id="casheaFoto"></div>
       ${v ? "" : `<label>Estado al guardar<select name="estado"><option value="pendiente">Pendiente</option><option value="cobrada">Cobrada</option></select></label>`}
       <p class="error" id="casheaError" hidden></p>
@@ -526,18 +652,86 @@ function abrirFormCashea(id) {
 function actualizarResumenCashea(form) {
   if (!form) return;
   const caja = $("#casheaCalc");
-  const total = leerMonto(form.monto_total_usd.value, 4);
-  const tasa = leerMonto(form.tasa.value, 4);
-  if (!total || !tasa) {
-    caja.innerHTML = `<p class="muted small">Escribe el monto en dólares y la tasa BCV para ver el cálculo.</p>`;
-    return;
-  }
-  const c = calculoCashea({ monto_total_usd: total, tasa });
+  if (!caja) return;
+  const total = leerMonto(form.monto_total_usd.value, 4) || 0;
+  const tasa = leerMonto(form.tasa.value, 4) || 0;
+  const pctInicial = Math.min(100, Math.max(0, Number(form.pct_inicial ? form.pct_inicial.value : CASHEA_PCT.inicial)));
+  const c = calculoCashea({ monto_total_usd: total, tasa, pct_inicial: pctInicial });
+  const pctIni = pctTexto(c.pctInicial);
+  const pctFin = pctTexto(c.pctFinanciado);
+  const tieneTasa = tasa > 0;
+  const tieneDatos = total > 0 && tasa > 0;
+  const fmtBs = monto => (tieneTasa ? bsTxt(monto) : "Bs —");
+
   caja.innerHTML = `
-    <div class="cs-calc-fila"><span>Inicial en caja (${CASHEA_PCT.inicial}%)</span><strong>${usd(c.inicialUsd)}</strong><small>${bsTxt(c.inicialBs)}</small></div>
-    <div class="cs-calc-fila"><span>Financiado (lo debe Cashea)</span><strong>${usd(c.financiadoUsd)}</strong></div>
-    <div class="cs-calc-fila"><span>Descuentos Cashea (${numeroVE(c.pctDescuento)}%)</span><strong>−${usd(c.descuentoUsd)}</strong></div>
-    <div class="cs-calc-fila"><span>Liquidación esperada</span><strong>${usd(c.liquidacionUsd)}</strong><small>${bsTxt(c.liquidacionBsVenta)} a la tasa de venta</small></div>`;
+    ${!tieneDatos ? `<p class="muted small cs-aviso-previa">Previsualización por bloques · escribe el monto en USD y la tasa BCV para ver los montos exactos.</p>` : ""}
+    <div class="cs-bloques">
+      <div class="cs-bloque cs-bloque-inicial">
+        <div class="cs-bloque-cab">
+          <span class="cs-bloque-titulo">Bloque 1 · Cobro en caja e inicial</span>
+          <button type="button" class="calc-pct-btn sm" data-cashea="pct-toggle" title="Cambiar porcentaje de inicial">
+            Inicial <strong>${pctIni}%</strong> <span class="calc-pct-editar">Cambiar %</span>
+          </button>
+        </div>
+        <div class="cs-fila-doble">
+          <div class="cs-concepto">
+            <strong>Monto total</strong>
+            <small>100% de la venta${tieneTasa ? ` (tasa ${numeroVE(tasa)} Bs)` : ""}</small>
+          </div>
+          <div class="cs-montos">
+            <span class="cs-usd">${usd(c.totalUsd)}</span>
+            <span class="cs-bs">${fmtBs(c.totalBs)}</span>
+          </div>
+        </div>
+        <div class="cs-fila-doble destacada">
+          <div class="cs-concepto">
+            <strong>Inicial a pagar en caja (${pctIni}%)</strong>
+            <small>Lo que paga el cliente en tienda (${pctIni}%)</small>
+          </div>
+          <div class="cs-montos">
+            <span class="cs-usd">${usd(c.inicialUsd)}</span>
+            <span class="cs-bs">${fmtBs(c.inicialBs)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cs-bloque cs-bloque-financiado">
+        <div class="cs-bloque-cab">
+          <span class="cs-bloque-titulo">Bloque 2 · Financiamiento y liquidación Cashea</span>
+          <span class="cs-pct-chip">Restante ${pctFin}%</span>
+        </div>
+        <div class="cs-fila-doble">
+          <div class="cs-concepto">
+            <strong>Monto financiado (${pctFin}%)</strong>
+            <small>Lo que queda por financiar con Cashea</small>
+          </div>
+          <div class="cs-montos">
+            <span class="cs-usd">${usd(c.financiadoUsd)}</span>
+            <span class="cs-bs">${fmtBs(c.financiadoBs)}</span>
+          </div>
+        </div>
+        <div class="cs-fila-doble descuento">
+          <div class="cs-concepto">
+            <strong>Descuento Cashea (${pctTexto(c.pctDescuento)}%)</strong>
+            <small>${pctTexto(c.pctAdelanto)}% pronto pago + ${pctTexto(c.pctComision)}% plataforma</small>
+          </div>
+          <div class="cs-montos">
+            <span class="cs-usd">−${usd(c.descuentoUsd)}</span>
+            <span class="cs-bs">${tieneTasa ? "−" + bsTxt(c.descuentoBs) : "Bs —"}</span>
+          </div>
+        </div>
+        <div class="cs-fila-doble liquidacion">
+          <div class="cs-concepto">
+            <strong>Liquidación esperada</strong>
+            <small>Monto neto a recibir de Cashea (a tasa de venta)</small>
+          </div>
+          <div class="cs-montos">
+            <span class="cs-usd">${usd(c.liquidacionUsd)}</span>
+            <span class="cs-bs">${fmtBs(c.liquidacionBsVenta)}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function validarCashea(d, id) {
@@ -548,6 +742,9 @@ function validarCashea(d, id) {
   if (!d.cedula) return "Escribe la cédula: la letra V, E, J o G y los números (ej. V-12345678).";
   if (d.monto_total_usd === null || d.monto_total_usd <= 0) return "El monto total en dólares debe ser mayor que cero.";
   if (d.tasa === null || d.tasa <= 0) return "La tasa BCV de la venta debe ser mayor que cero.";
+  if (d.pct_inicial === null || Number.isNaN(d.pct_inicial) || d.pct_inicial < 0 || d.pct_inicial > 100) {
+    return "El porcentaje de inicial debe estar entre 0% y 100%.";
+  }
   if (!METODOS_PAGO_CASHEA.includes(d.metodo_pago)) return "Elige el método de pago de la inicial.";
   if (mesCerrado(periodoDe(d.fecha))) return `El mes ${periodoDe(d.fecha)} ya está cerrado. Registra la venta con la fecha de un mes abierto.`;
   if (adm.cashea.some(v => v.id !== id && normaTexto(v.factura) === normaTexto(d.factura))) {
@@ -560,6 +757,7 @@ async function guardarCashea(e) {
   const form = e.target;
   const id = form.dataset.id || null;
   const error = $("#casheaError");
+  const pctElegido = form.pct_inicial ? Number(form.pct_inicial.value) : CASHEA_PCT.inicial;
   const d = {
     factura: String(form.factura.value || "").trim(),
     nombre: String(form.nombre.value || "").trim(),
@@ -570,6 +768,7 @@ async function guardarCashea(e) {
     metodo_pago: String(form.metodo_pago.value || "") || null,
     monto_total_usd: leerMonto(form.monto_total_usd.value, 4),
     tasa: leerMonto(form.tasa.value, 4),
+    pct_inicial: Math.min(100, Math.max(0, redondeo2(pctElegido))),
   };
   const aviso = validarCashea(d, id);
   if (aviso) {
@@ -583,8 +782,6 @@ async function guardarCashea(e) {
     return;
   }
   if (!id) {
-    // Cada venta nueva guarda sus porcentajes: si después cambian, esta venta no se mueve
-    d.pct_inicial = CASHEA_PCT.inicial;
     d.pct_comision = CASHEA_PCT.comision;
     d.pct_adelanto = CASHEA_PCT.adelanto;
     d.estado = form.estado && form.estado.value === "cobrada" ? "cobrada" : "pendiente";
@@ -596,13 +793,26 @@ async function guardarCashea(e) {
     d.factura_foto = formFactura.path;
     if (formFactura.blob) {
       const jpg = await comprimir(formFactura.blob, 1600);
-      const ruta = `ventas/${crypto.randomUUID()}.jpg`;
+      const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const ruta = `ventas/${uid}.jpg`;
       const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
-        contentType: "image/jpeg",
+        contentType: jpg.type || "image/jpeg",
         cacheControl: "3600",
+        upsert: true,
       });
-      if (errorFoto) throw errorFoto;
-      d.factura_foto = ruta;
+      if (errorFoto) {
+        // Respaldo en bucket público 'catalogo' si 'facturas' falla por permisos o configuración
+        const rutaRespaldo = `facturas/${uid}.jpg`;
+        const { error: errResp } = await sb.storage.from("catalogo").upload(rutaRespaldo, jpg, {
+          contentType: jpg.type || "image/jpeg",
+          cacheControl: "3600",
+          upsert: true,
+        });
+        if (errResp) throw errorFoto;
+        d.factura_foto = sb.storage.from("catalogo").getPublicUrl(rutaRespaldo).data.publicUrl;
+      } else {
+        d.factura_foto = ruta;
+      }
     }
     const consulta = id
       ? sb.from("cashea_ventas").update(d).eq("id", id)
@@ -697,6 +907,38 @@ document.addEventListener("click", (e) => {
   if (b.dataset.cashea === "cerrar") return cerrarModal();
   if (b.dataset.cashea === "estado") return cambiarEstadoCashea(b.dataset.id, b.dataset.estado);
   if (b.dataset.cashea === "exportar") return exportarCashea();
+  if (b.dataset.cashea === "quitar-foto") {
+    formFactura.blob = null;
+    return pintarFotoFormCashea();
+  }
+  if (b.dataset.cashea === "pct-toggle") {
+    const editor = document.getElementById("casheaPctEditor");
+    if (!editor) return;
+    editor.hidden = !editor.hidden;
+    const input = document.getElementById("casheaPctInput");
+    if (!editor.hidden && input) {
+      input.focus();
+      input.select();
+    }
+    return;
+  }
+  if (b.dataset.cashea === "pct-set") {
+    const form = document.getElementById("formCashea");
+    if (!form) return;
+    const pct = Math.min(100, Math.max(0, Number(b.dataset.pct ?? 40)));
+    if (form.pct_inicial) form.pct_inicial.value = String(pct);
+    const input = document.getElementById("casheaPctInput");
+    if (input) input.value = String(pct);
+    document.querySelectorAll("#casheaPctRapidos [data-pct]").forEach(btn => {
+      btn.classList.toggle("on", Number(btn.dataset.pct) === pct);
+    });
+    return actualizarResumenCashea(form);
+  }
+  if (b.dataset.cashea === "pct-cerrar") {
+    const editor = document.getElementById("casheaPctEditor");
+    if (editor) editor.hidden = true;
+    return;
+  }
 });
 
 document.addEventListener("input", (e) => {
@@ -705,18 +947,35 @@ document.addEventListener("input", (e) => {
     vistaCashea.q = t.value;
     return pintarCashea();
   }
+  if (t.id === "casheaPctInput") {
+    const form = document.getElementById("formCashea");
+    if (!form) return;
+    const limpio = String(t.value ?? "").replace(",", ".").trim();
+    const pct = limpio === "" ? 0 : Math.min(100, Math.max(0, redondeo2(Number(limpio) || 0)));
+    if (form.pct_inicial) form.pct_inicial.value = String(pct);
+    document.querySelectorAll("#casheaPctRapidos [data-pct]").forEach(btn => {
+      btn.classList.toggle("on", Number(btn.dataset.pct) === pct);
+    });
+    return actualizarResumenCashea(form);
+  }
   if (t.closest && t.closest("#formCashea")) actualizarResumenCashea(t.form);
   if (t.closest && t.closest("#formComprobar")) actualizarComprobarCashea(t.form);
 });
 
-document.addEventListener("change", (e) => {
+document.addEventListener("change", async (e) => {
   const t = e.target;
   if (t.id === "casheaFotoSubir") {
     const archivo = t.files && t.files[0];
     t.value = "";
-    if (archivo) {
-      formFactura.blob = archivo;
-      pintarFotoFormCashea();
+    if (!archivo) return;
+    if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
+      return toast("El archivo elegido no es una imagen válida.");
+    }
+    try {
+      formFactura.blob = await comprimir(archivo, 1600);
+      await pintarFotoFormCashea();
+    } catch (err) {
+      toast("No se pudo preparar la foto: " + (err.message || "error"));
     }
     return;
   }

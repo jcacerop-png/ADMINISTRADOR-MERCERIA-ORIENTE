@@ -48,15 +48,18 @@ async function subirFotosCarrusel(files) {
   let orden = car.lista.reduce((m, f) => Math.max(m, Number(f.orden) || 0), 0);
   let subidas = 0;
   for (const file of lista.slice(0, libres)) {
-    if (!file.type.startsWith("image/")) { toast("Solo se pueden subir imágenes"); continue; }
+    const valida = typeof esArchivoImagen === "function" ? esArchivoImagen(file) : (file.type || "").startsWith("image/");
+    if (!valida) { toast("Solo se pueden subir imágenes"); continue; }
     if (file.size > 20 * 1024 * 1024) { toast("Esa foto pesa más de 20 MB"); continue; }
     try {
       toast("Subiendo foto…");
       const blob = await comprimir(file, 1920);
-      const ruta = `carrusel/${crypto.randomUUID()}.jpg`;
+      const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const ruta = `carrusel/${uid}.jpg`;
       const { error: errSubida } = await sb.storage.from("catalogo").upload(ruta, blob, {
-        contentType: "image/jpeg",
+        contentType: blob.type || "image/jpeg",
         cacheControl: "31536000",
+        upsert: true,
       });
       if (errSubida) throw errSubida;
       const url = sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl;
