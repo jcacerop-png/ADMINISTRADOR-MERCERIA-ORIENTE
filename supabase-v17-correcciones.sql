@@ -23,17 +23,25 @@
 begin;
 
 -- ---------------------------------------------------------------------
--- 1) Quién es quién (misma regla de siempre: solo las dos cuentas del panel)
+-- 1) Quién es quién (solo las dos cuentas autorizadas del panel,
+--    más permiso interno cuando corres scripts desde el SQL Editor de Supabase)
 -- ---------------------------------------------------------------------
 create or replace function public.usuaria_actual()
 returns text language plpgsql stable security definer set search_path = public as $$
-declare v_nombre text;
+declare
+  v_email  text := lower(btrim(coalesce(auth.jwt() ->> 'email', '')));
+  v_nombre text;
 begin
-  v_nombre := case lower(btrim(coalesce(auth.jwt() ->> 'email', '')))
+  v_nombre := case v_email
     when 'rodolfo019@merceria.com'       then 'Rodolfo'
     when 'administrador029@merceria.com' then 'Administrador'
     else null
   end;
+  -- Cuando ejecutas una consulta o migración directamente en el SQL Editor de Supabase,
+  -- no hay token JWT web (v_email = '') y el usuario de base de datos es postgres / service_role.
+  if v_nombre is null and v_email = '' and current_user in ('postgres', 'supabase_admin', 'service_role') then
+    return 'Rodolfo';
+  end if;
   if v_nombre is null then
     raise exception 'Cuenta no autorizada';
   end if;
