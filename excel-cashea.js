@@ -13,11 +13,11 @@
    ========================================================= */
 
 const COLUMNAS_VENTAS_XL = [
-  "Nº", "Fecha", "Factura", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Tasa BCV de venta (Bs)",
+  "Nº", "Fecha", "Factura Fiscal", "Factura Cashea", "Nombre", "Apellido", "Cédula", "Monto total (US$)", "Tasa BCV de venta (Bs)",
   "Método de pago (inicial)", "Inicial (US$)", "Financiado (US$)", "Descuentos (US$)", "Liquidación (US$)",
   "Estado", "Pago de Cashea (Bs)", "Resultado de la comprobación", "Detalles",
 ];
-const ANCHOS_VENTAS_XL = [6, 12, 14, 16, 16, 14, 15, 15, 18, 13, 14, 14, 15, 12, 16, 22, 46];
+const ANCHOS_VENTAS_XL = [6, 12, 16, 16, 16, 16, 14, 15, 15, 18, 13, 14, 14, 15, 12, 16, 22, 46];
 const COLUMNAS_RESUMEN_XL = ["Tienda", "Ventas", "Anuladas", "Total (US$)", "Inicial (US$)", "Descuentos (US$)", "Liquidación (US$)"];
 const FILTROS_VENTAS_XL = { todas: "Todas", pendiente: "Pendientes", cobrada: "Cobradas", anulada: "Anuladas" };
 
@@ -33,10 +33,10 @@ function descripcionFiltroXL() {
   return partes.join(" · ");
 }
 
-// Orden de las filas: por fecha y luego por número de factura
+// Orden de las filas: por fecha y luego por número de factura fiscal
 const ordenVentasXL = (a, b) => {
   if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
-  return String(a.factura).localeCompare(String(b.factura), "es");
+  return String(facturaFiscalDe(a)).localeCompare(String(facturaFiscalDe(b)), "es");
 };
 
 // Totales de una lista de ventas. Las anuladas cuentan solo como anuladas, no suman dinero

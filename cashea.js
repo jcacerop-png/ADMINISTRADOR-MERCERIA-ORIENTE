@@ -156,6 +156,10 @@ const pillCompCashea = v => {
   return `<span class="pill-comp ${clave}">${RESULTADO_CASHEA[clave]}</span>`;
 };
 
+/* ---------- Factura Fiscal y Factura Cashea (compatibles con historial anterior) ---------- */
+const facturaFiscalDe = v => String((v && (v.factura_fiscal || v.factura)) || "").trim();
+const facturaCasheaDe = v => String((v && v.factura_cashea) || "").trim();
+
 /* ---------- Lectura ---------- */
 // Cada pestaña de Cashea muestra solo su tienda (o todas, en "Cashea total")
 function fijarTiendaCashea(tab) {
@@ -163,6 +167,10 @@ function fijarTiendaCashea(tab) {
 }
 
 async function refrescarCashea() {
+  if (typeof asegurarSesion === "function") {
+    const sesion = await asegurarSesion();
+    if (!sesion) return;
+  }
   try {
     const [ventas, cierres] = await Promise.all([
       sb.from("cashea_ventas").select("*")
@@ -182,6 +190,10 @@ async function refrescarCashea() {
     pintarCashea();
     if (typeof pintarCierre === "function") pintarCierre();
   } catch (err) {
+    if (typeof esErrorDeSesion === "function" && esErrorDeSesion(err)) {
+      if (typeof salir === "function") await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     toast("No se pudieron cargar las ventas Cashea: " + (err.message || "error"));
   }
 }
@@ -195,7 +207,7 @@ function casheaFiltradas() {
   const q = normaTexto(vistaCashea.q);
   return casheaDeTienda().filter(v =>
     (vistaCashea.filtro === "todas" || v.estado === vistaCashea.filtro) &&
-    (!q || normaTexto(`${v.factura} ${v.nombre} ${v.apellido} ${v.cedula || ""}`).includes(q)));
+    (!q || normaTexto(`${facturaFiscalDe(v)} ${facturaCasheaDe(v)} ${v.nombre} ${v.apellido} ${v.cedula || ""}`).includes(q)));
 }
 
 /* ---------- Pantalla ---------- */
@@ -224,7 +236,7 @@ function pintarCashea() {
   $("#casheaResumen").textContent = lista.length
     ? `${lista.length} venta(s) · inicial en caja ${bsTxt(redondeo2(sumar(lista, x => x.c.inicialBs)))} · liquidación esperada ${usd(redondeo2(sumar(lista, x => x.c.liquidacionUsd)))}`
     : "";
-  const columnas = ["Factura", "Día", ...(mostrarTienda ? ["Tienda"] : []), "Cliente", "Cédula", "Total", "Inicial en caja", "Financiado", "Liquidación esperada", "Pago de Cashea", "Estado", "Acciones"];
+  const columnas = ["Facturas", "Día", ...(mostrarTienda ? ["Tienda"] : []), "Cliente", "Cédula", "Total", "Inicial en caja", "Financiado", "Liquidación esperada", "Pago de Cashea", "Estado", "Acciones"];
   $("#casheaTabla").innerHTML = lista.length
     ? `<div class="cs-desk">
         <table class="tabla-inv">
@@ -258,8 +270,13 @@ function celdaPagoCashea(r) {
 }
 
 function filaCashea(v, c, r, mostrarTienda) {
+  const fiscal = facturaFiscalDe(v);
+  const casheaNum = facturaCasheaDe(v);
   return `<tr class="${v.estado === "anulada" ? "anulada" : ""}">
-    <td><strong>${esc(v.factura)}</strong></td>
+    <td>
+      <div><small class="muted">Fiscal:</small> <strong>${esc(fiscal || "—")}</strong></div>
+      <div><small class="muted">Cashea:</small> <strong>${esc(casheaNum || "—")}</strong></div>
+    </td>
     <td>${esc(fechaTxt(v.fecha))}</td>
     ${mostrarTienda ? `<td><span class="pill-tienda">${esc(TIENDAS_CASHEA[v.tienda] || v.tienda)}</span></td>` : ""}
     <td>${esc(v.nombre)} ${esc(v.apellido)}</td>
@@ -276,10 +293,16 @@ function filaCashea(v, c, r, mostrarTienda) {
 
 function tarjetaCashea(v, c, r, mostrarTienda) {
   const estado = esc(v.estado);
+  const fiscal = facturaFiscalDe(v);
+  const casheaNum = facturaCasheaDe(v);
   const subtitulo = [fechaTxt(v.fecha), mostrarTienda ? TIENDAS_CASHEA[v.tienda] : ""].filter(Boolean).join(" · ");
   return `<article class="cs-card ${v.estado === "anulada" ? "anulada" : ""}">
     <header class="cs-card-cab">
-      <div><strong>${esc(v.factura)}</strong><small>${esc(subtitulo)}</small></div>
+      <div>
+        <strong>Fiscal: ${esc(fiscal || "—")}</strong>
+        ${casheaNum ? `<small style="display:block;font-weight:700">Cashea: ${esc(casheaNum)}</small>` : ""}
+        <small>${esc(subtitulo)}</small>
+      </div>
       <span class="pill-estado ${estado}">${ESTADOS_CASHEA[v.estado] || estado}</span>
     </header>
     <p class="cs-cliente">${esc(v.nombre)} ${esc(v.apellido)}${v.cedula ? ` · <small class="muted">${esc(v.cedula)}</small>` : ""}</p>
@@ -777,6 +800,18 @@ async function guardarCashea(e) {
   const form = e.target;
   const id = form.dataset.id || null;
   const error = $("#casheaError");
+  if (error) {
+    error.textContent = "";
+    error.hidden = true;
+  }
+  const mostrarError = msg => {
+    if (error) {
+      error.textContent = msg;
+      error.hidden = false;
+      error.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    toast(msg);
+  };
   const pctElegido = form.pct_inicial ? Number(form.pct_inicial.value) : CASHEA_PCT.inicial;
   const fFiscal = String((form.factura_fiscal && form.factura_fiscal.value) || "").trim();
   const fCashea = String((form.factura_cashea && form.factura_cashea.value) || "").trim();
@@ -795,15 +830,9 @@ async function guardarCashea(e) {
     pct_inicial: Math.min(100, Math.max(0, redondeo2(pctElegido))),
   };
   const aviso = validarCashea(d, id);
-  if (aviso) {
-    error.textContent = aviso;
-    error.hidden = false;
-    return;
-  }
+  if (aviso) return mostrarError(aviso);
   if (!formFactura.blob && !formFactura.path) {
-    error.textContent = "Sube la foto de la factura con el botón + Subir foto.";
-    error.hidden = false;
-    return;
+    return mostrarError("Sube la foto de la factura con el botón + Subir foto.");
   }
   if (!id) {
     d.pct_comision = CASHEA_PCT.comision;
@@ -812,7 +841,11 @@ async function guardarCashea(e) {
   }
 
   const boton = form.querySelector("[type=submit]");
-  boton.disabled = true;
+  const textoOrig = boton ? boton.textContent : "Guardar";
+  if (boton) {
+    boton.disabled = true;
+    boton.textContent = "Guardando…";
+  }
   try {
     if (typeof asegurarSesion === "function") {
       const sesion = await asegurarSesion();
@@ -823,7 +856,9 @@ async function guardarCashea(e) {
     }
     d.factura_foto = formFactura.path;
     if (formFactura.blob) {
-      const jpg = await comprimir(formFactura.blob, 1600);
+      const jpg = (formFactura.blob instanceof Blob && !(formFactura.blob instanceof File) && formFactura.blob.type === "image/jpeg")
+        ? formFactura.blob
+        : await comprimir(formFactura.blob, 1600);
       const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const ruta = `ventas/${uid}.jpg`;
       const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
@@ -872,14 +907,17 @@ async function guardarCashea(e) {
       if (typeof salir === "function") await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
       return;
     }
-    error.textContent = err.code === "23505"
+    const msg = err.code === "23505"
       ? `Ya existe una venta con esa Factura Fiscal (${d.factura_fiscal}) o Factura Cashea (${d.factura_cashea}).`
       : err.code === "23514"
         ? "Revisa los datos: el monto, la tasa, la cédula y el método deben ser válidos."
         : "No se guardó: " + (err.message || "error");
-    error.hidden = false;
+    mostrarError(msg);
   } finally {
-    boton.disabled = false;
+    if (boton) {
+      boton.disabled = false;
+      boton.textContent = textoOrig;
+    }
   }
 }
 

@@ -191,7 +191,7 @@ async function entrarPanel() {
   await cargar();
 }
 
-async function salir() {
+async function salir(aviso = "") {
   try {
     sb.removeAllChannels();
     await sb.auth.signOut();
@@ -202,6 +202,55 @@ async function salir() {
   adm.form = null;
   cerrarModal();
   mostrarLogin();
+  if (aviso) toast(aviso);
+}
+
+/* Verifica que haya una sesión JWT válida en Supabase antes de leer o guardar.
+   Si el token está por vencer o expiró, intenta renovarlo con refreshSession().
+   Si no hay sesión válida, redirige limpiamente al login en lugar de mostrar tablas vacías o error RLS. */
+async function asegurarSesion() {
+  if (!sb) return null;
+  try {
+    const { data, error } = await sb.auth.getSession();
+    let session = !error && data ? data.session : null;
+    const ahoraSeg = Math.floor(Date.now() / 1000);
+    if (session && session.expires_at && session.expires_at - ahoraSeg < 90) {
+      const ref = await sb.auth.refreshSession();
+      if (!ref.error && ref.data && ref.data.session) session = ref.data.session;
+    }
+    if (!session) {
+      const ref = await sb.auth.refreshSession();
+      if (!ref.error && ref.data && ref.data.session) session = ref.data.session;
+    }
+    const email = session && session.user ? String(session.user.email || "").toLowerCase().trim() : "";
+    if (!session || !CUENTAS[email]) {
+      if (adm.usuaria) {
+        await salir("Tu sesión expiró. Inicia sesión nuevamente para ver y guardar tus datos.");
+      }
+      return null;
+    }
+    adm.usuaria = CUENTAS[email];
+    const quienEl = $("#quien");
+    if (quienEl) quienEl.textContent = `Sesión: ${adm.usuaria}`;
+    return session;
+  } catch (err) {
+    console.error("Error verificando sesión:", err);
+    return null;
+  }
+}
+
+function esErrorDeSesion(err) {
+  if (!err) return false;
+  const msg = String(err.message || err.error_description || "").toLowerCase();
+  const code = String(err.code || "");
+  return (
+    code === "PGRST301" ||
+    err.status === 401 ||
+    msg.includes("jwt expired") ||
+    msg.includes("invalid jwt") ||
+    msg.includes("auth session missing") ||
+    msg.includes("cuenta no autorizada")
+  );
 }
 
 function suscribir() {
@@ -221,6 +270,8 @@ function suscribir() {
 /* ---------- Carga y pintado ---------- */
 async function cargar() {
   if (!adm.usuaria) return;
+  const sesion = await asegurarSesion();
+  if (!sesion) return;
   try {
     const [p, t, a, n] = await Promise.all([
       sb.from("productos").select("*").order("nombre"),
@@ -239,6 +290,10 @@ async function cargar() {
     pintarNotas();
     alEntrarTab(adm.tab);
   } catch (err) {
+    if (esErrorDeSesion(err)) {
+      await salir("Tu sesión expiró. Vuelve a iniciar sesión.");
+      return;
+    }
     toast("No se pudieron cargar los datos: " + (err.message || "error"));
   }
 }
@@ -246,7 +301,10 @@ async function cargar() {
 // Cada pestaña nueva se refresca solo cuando se abre (o cuando llegan cambios en vivo)
 function alEntrarTab(tab) {
   if (tab === "calculadora" && typeof pintarCalculadora === "function") pintarCalculadora();
-  if (tab === "carrusel" && typeof refrescarCarrusel === "function") refrescarCarrusel();
+  if (tab === "carrusel") {
+    if (typeof refrescarCarrusel === "function") refrescarCarrusel();
+    if (typeof refrescarHeroPie === "function") refrescarHeroPie();
+  }
   if (tab.startsWith("cashea") && typeof refrescarCashea === "function") {
     if (typeof fijarTiendaCashea === "function") fijarTiendaCashea(tab);
     refrescarCashea();
