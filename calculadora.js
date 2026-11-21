@@ -10,7 +10,7 @@
 
 const calc = {
   filas: [""],         // precios tal como los escribe la persona (texto)
-  factura: null,       // foto de la factura (Blob en memoria), se guarda con la venta de Cashea
+  facturas: [],        // fotos de la factura (Blobs en memoria), se guardan con la venta de Cashea
   tasa: "",            // tasa de cambio (Bs por 1 USD), texto
   tienda: "merceria",  // Mercería Oriente siempre de primera por defecto
   fecha: "",           // fecha de venta, AAAA-MM-DD
@@ -43,7 +43,7 @@ function totalesCalculadora() {
   const suma = Math.round(calc.filas.reduce((a, t) => a + (leerMonto(t, 2) || 0), 0) * 100) / 100;
   const iva = Math.round(suma * IVA_TASA * 100) / 100;
   const total = Math.round((suma + iva) * 100) / 100;
-  const tasa = leerMonto(calc.tasa, 2);
+  const tasa = leerMonto(calc.tasa, 4);
   const tasaValida = tasa && tasa > 0 ? tasa : null;
   const bs = tasaValida ? Math.round(total * tasaValida * 100) / 100 : null;
   const pctInicial = Math.min(100, Math.max(0, Number(calc.pctInicial ?? 40)));
@@ -86,14 +86,26 @@ function pintarTotalesCalc() {
   });
 }
 
-// Muestra la foto de la factura elegida, con opción de quitarla
+// Muestra las fotos de la factura elegidas, con opción de quitar cada una
 function pintarFotoCalc() {
   const caja = document.getElementById("calcFotoVista");
   if (!caja) return;
-  caja.innerHTML = calc.factura
-    ? `<div class="foto-factura-marco"><img src="${URL.createObjectURL(calc.factura)}" alt="Foto de la factura"></div>
-       <button type="button" class="btn ghost sm" data-calc="quitar-foto">Quitar foto</button>`
-    : `<p class="muted small">Todavía no hay foto de la factura.</p>`;
+  if (!calc.facturas.length) {
+    caja.innerHTML = `<p class="muted small">Todavía no hay fotos de la factura.</p>`;
+    return;
+  }
+  caja.innerHTML = `
+    <div class="fotos-factura-grid">
+      ${calc.facturas.map((blob, idx) => {
+        const src = URL.createObjectURL(blob);
+        return `
+          <div class="foto-factura-item">
+            <img src="${esc(src)}" alt="Foto ${idx + 1} de la factura" data-zoom="${esc(src)}">
+            <button type="button" class="foto-factura-quitar" data-calc="quitar-foto" data-idx="${idx}" aria-label="Quitar foto ${idx + 1}" title="Quitar foto">✕</button>
+            <span class="foto-factura-num">${idx + 1}</span>
+          </div>`;
+      }).join("")}
+    </div>`;
 }
 
 // Pone en pantalla la configuración guardada (tienda, fecha, tasa)
@@ -145,9 +157,9 @@ async function sincronizarTasaCalc() {
   toast(`Tasa tomada de la última venta: ${calc.tasa} Bs`);
 }
 
-// Pasa tienda, fecha, tasa, porcentaje de inicial y foto de la factura a una nueva venta de Cashea
+// Pasa tienda, fecha, tasa, porcentaje de inicial y fotos de la factura a una nueva venta de Cashea
 function aplicarCalc() {
-  const tasa = leerMonto(calc.tasa, 2);
+  const tasa = leerMonto(calc.tasa, 4);
   if (!tasa || tasa <= 0) return toast("Escribe una tasa de cambio válida antes de aplicar.");
   if (!TIENDAS_CASHEA[calc.tienda]) return toast("Elige una tienda.");
   const { total, pctInicial } = totalesCalculadora();
@@ -158,7 +170,8 @@ function aplicarCalc() {
     monto: total,
     pct_inicial: pctInicial,
     metodo: calc.metodo || null,
-    factura: calc.factura,
+    facturas: [...calc.facturas],
+    factura: calc.facturas[0] || null,
   };
   pintarEstadoAplicado();
   limpiarTodoCalc();
@@ -166,7 +179,7 @@ function aplicarCalc() {
   abrirFormCashea(null);
 }
 
-// Vacía toda la calculadora: precios, tasa, tienda, fecha, porcentaje y foto vuelven a su estado inicial
+// Vacía toda la calculadora: precios, tasa, tienda, fecha, porcentaje y fotos vuelven a su estado inicial
 function limpiarTodoCalc() {
   calc.filas = [""];
   calc.tasa = "";
@@ -174,7 +187,7 @@ function limpiarTodoCalc() {
   calc.fecha = hoyISO();
   calc.metodo = "";
   calc.pctInicial = 40;
-  calc.factura = null;
+  calc.facturas = [];
   const editor = document.getElementById("calcPctEditor");
   if (editor) editor.hidden = true;
   pintarFilasCalc();
@@ -186,7 +199,7 @@ function limpiarTodoCalc() {
 function limpiarCalc() {
   calc.filas = [""];
   calc.pctInicial = 40;
-  calc.factura = null;
+  calc.facturas = [];
   const editor = document.getElementById("calcPctEditor");
   if (editor) editor.hidden = true;
   const pctInput = document.getElementById("calcPctInput");
@@ -220,18 +233,24 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", async (e) => {
   if (e.target.id === "calcFotoSubir") {
-    const archivo = e.target.files && e.target.files[0];
+    const archivos = [...(e.target.files || [])];
     e.target.value = "";
-    if (!archivo) return;
-    if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
-      return toast("El archivo elegido no es una imagen válida.");
+    if (!archivos.length) return;
+    const maxFotos = typeof MAX_FOTOS_CASHEA === "number" ? MAX_FOTOS_CASHEA : 8;
+    const cupo = maxFotos - calc.facturas.length;
+    if (cupo <= 0) return toast(`Máximo ${maxFotos} fotos por venta.`);
+    for (const archivo of archivos.slice(0, cupo)) {
+      if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
+        toast(`"${archivo.name}" no es una imagen válida.`);
+        continue;
+      }
+      try {
+        calc.facturas.push(await comprimir(archivo, 1600));
+      } catch (err) {
+        toast("No se pudo preparar la foto: " + (err.message || "error"));
+      }
     }
-    try {
-      calc.factura = await comprimir(archivo, 1600);
-      pintarFotoCalc();
-    } catch (err) {
-      toast("No se pudo preparar la foto: " + (err.message || "error"));
-    }
+    pintarFotoCalc();
     return;
   }
   if (e.target.id === "calcTienda") calc.tienda = e.target.value;
@@ -281,7 +300,15 @@ document.addEventListener("click", (e) => {
       if (editor) editor.hidden = true;
       return;
     }
-    case "quitar-foto": calc.factura = null; return pintarFotoCalc();
+    case "quitar-foto": {
+      const idx = Number(boton.dataset.idx);
+      if (Number.isInteger(idx) && idx >= 0 && idx < calc.facturas.length) {
+        calc.facturas.splice(idx, 1);
+      } else {
+        calc.facturas = [];
+      }
+      return pintarFotoCalc();
+    }
     case "sync": return sincronizarTasaCalc();
     case "aplicar": return aplicarCalc();
     case "limpiar": return limpiarCalc();

@@ -1531,4 +1531,73 @@ body.panel .calc-mini-ini {
   color: rgba(245, 245, 245, .82);
 }
 
+/* ======================================================
+   v18 · Múltiples fotos de factura en Cashea y Calculadora
+   ====================================================== */
+.fotos-factura-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.foto-factura-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+  background: var(--foto);
+}
+.foto-factura-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.foto-factura-quitar,
+.foto-factura-abrir {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid #0D0D0D;
+  background: rgba(250, 204, 21, .95);
+  color: #0D0D0D;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 0;
+}
+.foto-factura-quitar:hover {
+  background: var(--malo);
+  border-color: var(--malo);
+  color: #FFFFFF;
+}
+.foto-factura-num {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(13, 13, 13, .78);
+  color: #FACC15;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.btn-file.disabled {
+  opacity: .45;
+  pointer-events: none;
+}
+
+
 

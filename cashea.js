@@ -40,12 +40,12 @@ const pctTexto = n => {
   return Number.isInteger(v) ? String(v) : String(v).replace(".", ",");
 };
 
-// Acepta "1.250,50", "1250,5", "1250.5" y "1.250". Devuelve número o null si no es válido.
+// Acepta "1.250,50", "1250,5", "1250.5", "95.485" y "1.250.000". Devuelve número o null si no es válido.
 function leerMonto(v, decimales = 2) {
   let s = String(v ?? "").trim().replace(/\s/g, "");
   if (s === "") return null;
   if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  else if (/^\d{1,3}(\.\d{3}){2,}$/.test(s)) s = s.replace(/\./g, "");
   if (!/^\d+(\.\d+)?$/.test(s)) return null;
   const f = 10 ** decimales;
   return Math.round(Number(s) * f) / f;
@@ -99,7 +99,7 @@ function calculoCashea(v) {
   const financiadoBs = redondeo2(tasa * financiadoUsd);
   const descuentoUsd = redondeo2(redondeo2(total * pCom / 100) + redondeo2(total * pAde / 100));
   const descuentoBs = redondeo2(tasa * descuentoUsd);
-  const liquidacionUsd = redondeo2(financiadoUsd - descuentoUsd);
+  const liquidacionUsd = Math.max(0, redondeo2(financiadoUsd - descuentoUsd));
   const liquidacionBsVenta = redondeo2(tasa * liquidacionUsd);
   return {
     totalUsd: total,
@@ -156,9 +156,31 @@ const pillCompCashea = v => {
   return `<span class="pill-comp ${clave}">${RESULTADO_CASHEA[clave]}</span>`;
 };
 
-/* ---------- Factura Fiscal y Factura Cashea (compatibles con historial anterior) ---------- */
+/* ---------- Factura Fiscal, Factura Cashea y múltiples fotos (compatibles con historial anterior) ---------- */
+const MAX_FOTOS_CASHEA = 8;
 const facturaFiscalDe = v => String((v && (v.factura_fiscal || v.factura)) || "").trim();
 const facturaCasheaDe = v => String((v && v.factura_cashea) || "").trim();
+
+function fotosFacturaDe(v) {
+  const raw = v && v.factura_foto;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(x => String(x || "").trim()).filter(Boolean);
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.map(x => String(x || "").trim()).filter(Boolean);
+    } catch { /* respaldo: una sola ruta */ }
+  }
+  return [s];
+}
+
+function serializarFotosFactura(rutas) {
+  const limpias = (rutas || []).map(x => String(x || "").trim()).filter(Boolean);
+  if (!limpias.length) return null;
+  return limpias.length === 1 ? limpias[0] : JSON.stringify(limpias);
+}
 
 /* ---------- Lectura ---------- */
 // Cada pestaña de Cashea muestra solo su tienda (o todas, en "Cashea total")
@@ -212,20 +234,25 @@ function casheaFiltradas() {
 
 /* ---------- Pantalla ---------- */
 function pintarCashea() {
-  const sumar = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+  const sumar = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
   const base = casheaDeTienda();
   const todas = base.map(v => ({ v, c: calculoCashea(v), r: compararCashea(v) }));
+  // Solo suma la liquidación esperada de Cashea de las ventas pendientes sin comprobar
   const porCobrar = todas.filter(x => x.v.estado === "pendiente" && !x.r);
-  const delMes = todas.filter(x => x.r && esDelMesActual(x.v.liq_fecha));
+  const delMes = todas.filter(x => x.v.estado !== "anulada" && x.r && esDelMesActual(x.v.liq_fecha));
   const conDif = todas.filter(x => x.r && x.r.estado !== "cuadra" && x.v.estado !== "anulada");
+
+  const porCobrarUsd = redondeo2(sumar(porCobrar, x => x.c.liquidacionUsd));
+  const porCobrarBs = redondeo2(sumar(porCobrar, x => x.c.liquidacionBsVenta));
+  const recibidoMesBs = redondeo2(sumar(delMes, x => x.r.recibidoBs));
 
   const titulo = vistaCashea.tienda === "todas" ? "Cashea total" : TIENDAS_CASHEA[vistaCashea.tienda];
   $("#casheaTitulo").textContent = titulo;
 
   $("#casheaKpis").innerHTML = [
-    kpi("Por cobrar a Cashea (USD)", usd(redondeo2(sumar(porCobrar, x => x.c.liquidacionUsd)))),
-    kpi("Por cobrar a Cashea (Bs, tasa de venta)", bsTxt(redondeo2(sumar(porCobrar, x => x.c.liquidacionBsVenta)))),
-    kpi("Recibido de Cashea este mes (Bs)", bsTxt(redondeo2(sumar(delMes, x => x.r.recibidoBs)))),
+    kpi("Por cobrar a Cashea (USD)", usd(porCobrarUsd)),
+    kpi("Por cobrar a Cashea (Bs · liquidación)", bsTxt(porCobrarBs)),
+    kpi("Recibido de Cashea este mes (Bs)", bsTxt(recibidoMesBs)),
     kpi("Con diferencia", conDif.length),
   ].join("");
 
@@ -233,8 +260,9 @@ function pintarCashea() {
 
   const mostrarTienda = vistaCashea.tienda === "todas";
   const lista = casheaFiltradas().map(v => ({ v, c: calculoCashea(v), r: compararCashea(v) }));
+  const activasLista = lista.filter(x => x.v.estado !== "anulada");
   $("#casheaResumen").textContent = lista.length
-    ? `${lista.length} venta(s) · inicial en caja ${bsTxt(redondeo2(sumar(lista, x => x.c.inicialBs)))} · liquidación esperada ${usd(redondeo2(sumar(lista, x => x.c.liquidacionUsd)))}`
+    ? `${lista.length} venta(s) · inicial en caja ${bsTxt(redondeo2(sumar(activasLista, x => x.c.inicialBs)))} · liquidación esperada ${usd(redondeo2(sumar(activasLista, x => x.c.liquidacionUsd)))} (${bsTxt(redondeo2(sumar(activasLista, x => x.c.liquidacionBsVenta)))})`
     : "";
   const columnas = ["Facturas", "Día", ...(mostrarTienda ? ["Tienda"] : []), "Cliente", "Cédula", "Total", "Inicial en caja", "Financiado", "Liquidación esperada", "Pago de Cashea", "Estado", "Acciones"];
   $("#casheaTabla").innerHTML = lista.length
@@ -461,9 +489,18 @@ function abrirDetalleCashea(id) {
   cargarFacturaDetalle(v);
 }
 
-/* ---------- Foto de la factura ---------- */
-// Foto de la factura del formulario abierto: blob (nueva, ya comprimida en memoria) o path (ya guardada)
-let formFactura = { blob: null, path: null };
+/* ---------- Fotos de la factura (múltiples fotos por venta Cashea) ---------- */
+// Cada elemento: { tipo: "blob", blob, previewUrl } o { tipo: "path", path }
+let formFacturas = [];
+
+function limpiarFormFacturas() {
+  formFacturas.forEach(item => {
+    if (item && item.previewUrl) {
+      try { URL.revokeObjectURL(item.previewUrl); } catch { /* noop */ }
+    }
+  });
+  formFacturas = [];
+}
 
 async function urlFotoFactura(ruta) {
   if (!ruta) throw new Error("sin ruta");
@@ -473,49 +510,81 @@ async function urlFotoFactura(ruta) {
   return data.signedUrl;
 }
 
-// Muestra en el formulario los botones para tomar o elegir la foto, y la foto actual
+// Muestra en el formulario el botón para subir múltiples fotos y la grilla con todas las fotos cargadas
 async function pintarFotoFormCashea() {
   const caja = document.getElementById("casheaFoto");
   if (!caja) return;
-  let vista = `<p class="muted small">Todavía no hay foto de la factura.</p>`;
-  let btnQuitar = "";
-  if (formFactura.blob) {
-    vista = `<div class="foto-factura-marco"><img src="${URL.createObjectURL(formFactura.blob)}" alt="Foto de la factura"></div>`;
-    btnQuitar = `<button type="button" class="btn ghost sm" data-cashea="quitar-foto">Quitar foto</button>`;
-  } else if (formFactura.path) {
-    try {
-      vista = `<div class="foto-factura-marco"><img src="${esc(await urlFotoFactura(formFactura.path))}" alt="Foto de la factura"></div>`;
-    } catch (err) {
-      vista = `<p class="error">No se pudo cargar la foto guardada: ${esc(err.message || "error")}</p>`;
-    }
+  const cant = formFacturas.length;
+  const lleno = cant >= MAX_FOTOS_CASHEA;
+
+  let vista = `<p class="muted small">Todavía no hay fotos de la factura. Puedes subir varias (factura fiscal, comprobante Cashea, pago móvil, etc.).</p>`;
+  if (cant > 0) {
+    const tarjetas = await Promise.all(formFacturas.map(async (item, idx) => {
+      let src = "";
+      let errMsg = "";
+      if (item.tipo === "blob") {
+        if (!item.previewUrl) item.previewUrl = URL.createObjectURL(item.blob);
+        src = item.previewUrl;
+      } else if (item.tipo === "path") {
+        try {
+          src = await urlFotoFactura(item.path);
+        } catch (err) {
+          errMsg = err.message || "error";
+        }
+      }
+      return `
+        <div class="foto-factura-item">
+          ${src
+            ? `<img src="${esc(src)}" alt="Foto ${idx + 1}" data-zoom="${esc(src)}">`
+            : `<p class="error small" style="padding:8px">Error: ${esc(errMsg)}</p>`}
+          <button type="button" class="foto-factura-quitar" data-cashea="quitar-foto" data-idx="${idx}" aria-label="Quitar foto ${idx + 1}" title="Quitar foto">✕</button>
+          <span class="foto-factura-num">${idx + 1}</span>
+        </div>`;
+    }));
+    vista = `<div class="fotos-factura-grid">${tarjetas.join("")}</div>`;
   }
+
   caja.innerHTML = `
     <div class="factura-cab">
-      <span class="factura-titulo">Foto de la factura *</span>
+      <span class="factura-titulo">Fotos de la factura * <small class="muted">(${cant}/${MAX_FOTOS_CASHEA})</small></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        ${btnQuitar}
-        <label class="btn sm btn-file" style="cursor:pointer">+ Subir foto<input type="file" id="casheaFotoSubir" accept="image/*" class="sr"></label>
+        <label class="btn sm btn-file ${lleno ? "disabled" : ""}" style="cursor:${lleno ? "not-allowed" : "pointer"}">
+          ${cant ? "+ Agregar más fotos" : "+ Subir fotos"}
+          <input type="file" id="casheaFotoSubir" accept="image/*" multiple class="sr" ${lleno ? "disabled" : ""}>
+        </label>
       </div>
     </div>
     ${vista}`;
 }
 
-// Foto de la factura dentro del detalle de la venta
+// Fotos de la factura dentro del detalle de la venta
 async function cargarFacturaDetalle(v) {
   const caja = document.getElementById("detFactura");
   if (!caja) return;
-  if (!v.factura_foto) {
-    caja.innerHTML = `<p class="muted small">Esta venta no tiene foto de la factura.</p>`;
+  const rutas = fotosFacturaDe(v);
+  if (!rutas.length) {
+    caja.innerHTML = `<p class="muted small">Esta venta no tiene fotos de la factura.</p>`;
     return;
   }
-  try {
-    const url = esc(await urlFotoFactura(v.factura_foto));
-    caja.innerHTML = `
-      <span class="factura-titulo">Foto de la factura</span>
-      <a href="${url}" target="_blank" rel="noopener"><img class="foto-factura" src="${url}" alt="Foto de la factura ${esc(facturaFiscalDe(v))}"></a>`;
-  } catch (err) {
-    caja.innerHTML = `<p class="error">No se pudo cargar la foto de la factura: ${esc(err.message || "error")}</p>`;
-  }
+  const resultados = await Promise.all(rutas.map(async (ruta, i) => {
+    try {
+      const url = await urlFotoFactura(ruta);
+      return { ok: true, url, i };
+    } catch (err) {
+      return { ok: false, msg: err.message || "error", i };
+    }
+  }));
+  const titulo = rutas.length === 1 ? "Foto de la factura" : `Fotos de la factura (${rutas.length})`;
+  caja.innerHTML = `
+    <span class="factura-titulo">${titulo}</span>
+    <div class="fotos-factura-grid">
+      ${resultados.map(r => r.ok
+        ? `<div class="foto-factura-item">
+            <img src="${esc(r.url)}" alt="Foto ${r.i + 1} de la factura ${esc(facturaFiscalDe(v))}" data-zoom="${esc(r.url)}">
+            <a class="foto-factura-abrir" href="${esc(r.url)}" target="_blank" rel="noopener" title="Abrir en pestaña nueva">↗</a>
+          </div>`
+        : `<p class="error small">No se pudo cargar la foto ${r.i + 1}: ${esc(r.msg)}</p>`).join("")}
+    </div>`;
 }
 
 /* ---------- Comprobar el pago de Cashea ---------- */
@@ -635,8 +704,20 @@ function abrirFormCashea(id) {
   const pctInicial = v
     ? Number(v.pct_inicial ?? CASHEA_PCT.inicial)
     : (aplicado && aplicado.pct_inicial !== undefined ? Number(aplicado.pct_inicial) : CASHEA_PCT.inicial);
-  // Foto de la factura: la que llega desde la calculadora, o la que ya tiene la venta
-  formFactura = { blob: aplicado && aplicado.factura ? aplicado.factura : null, path: v ? v.factura_foto || null : null };
+  // Fotos de la factura: las que llegan desde la calculadora, o las que ya tiene la venta
+  limpiarFormFacturas();
+  if (v) {
+    formFacturas = fotosFacturaDe(v).map(path => ({ tipo: "path", path }));
+  } else if (aplicado) {
+    const listaCalc = Array.isArray(aplicado.facturas) && aplicado.facturas.length
+      ? aplicado.facturas
+      : (aplicado.factura ? [aplicado.factura] : []);
+    formFacturas = listaCalc.slice(0, MAX_FOTOS_CASHEA).map(blob => ({
+      tipo: "blob",
+      blob,
+      previewUrl: URL.createObjectURL(blob),
+    }));
+  }
   const metodoInicial = v ? v.metodo_pago : (aplicado ? aplicado.metodo : "");
   const opcionesMetodo = METODOS_PAGO_CASHEA
     .map(m => `<option value="${esc(m)}" ${metodoInicial === m ? "selected" : ""}>${esc(m)}</option>`).join("");
@@ -831,8 +912,8 @@ async function guardarCashea(e) {
   };
   const aviso = validarCashea(d, id);
   if (aviso) return mostrarError(aviso);
-  if (!formFactura.blob && !formFactura.path) {
-    return mostrarError("Sube la foto de la factura con el botón + Subir foto.");
+  if (!formFacturas.length) {
+    return mostrarError("Sube al menos una foto de la factura con el botón + Subir fotos.");
   }
   if (!id) {
     d.pct_comision = CASHEA_PCT.comision;
@@ -854,32 +935,37 @@ async function guardarCashea(e) {
     if (!id && adm.usuaria) {
       d.registrado_por = adm.usuaria;
     }
-    d.factura_foto = formFactura.path;
-    if (formFactura.blob) {
-      const jpg = (formFactura.blob instanceof Blob && !(formFactura.blob instanceof File) && formFactura.blob.type === "image/jpeg")
-        ? formFactura.blob
-        : await comprimir(formFactura.blob, 1600);
-      const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const ruta = `ventas/${uid}.jpg`;
-      const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
-        contentType: jpg.type || "image/jpeg",
-        cacheControl: "3600",
-        upsert: false,
-      });
-      if (errorFoto) {
-        // Respaldo en bucket público 'catalogo' si 'facturas' falla por permisos o configuración
-        const rutaRespaldo = `facturas/${uid}.jpg`;
-        const { error: errResp } = await sb.storage.from("catalogo").upload(rutaRespaldo, jpg, {
+    const rutasFinales = [];
+    for (const item of formFacturas) {
+      if (item.tipo === "path" && item.path) {
+        rutasFinales.push(item.path);
+      } else if (item.tipo === "blob" && item.blob) {
+        const jpg = (item.blob instanceof Blob && !(item.blob instanceof File) && item.blob.type === "image/jpeg")
+          ? item.blob
+          : await comprimir(item.blob, 1600);
+        const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const ruta = `ventas/${uid}.jpg`;
+        const { error: errorFoto } = await sb.storage.from("facturas").upload(ruta, jpg, {
           contentType: jpg.type || "image/jpeg",
           cacheControl: "3600",
           upsert: false,
         });
-        if (errResp) throw errorFoto;
-        d.factura_foto = sb.storage.from("catalogo").getPublicUrl(rutaRespaldo).data.publicUrl;
-      } else {
-        d.factura_foto = ruta;
+        if (errorFoto) {
+          // Respaldo en bucket público 'catalogo' si 'facturas' falla por permisos o configuración
+          const rutaRespaldo = `facturas/${uid}.jpg`;
+          const { error: errResp } = await sb.storage.from("catalogo").upload(rutaRespaldo, jpg, {
+            contentType: jpg.type || "image/jpeg",
+            cacheControl: "3600",
+            upsert: false,
+          });
+          if (errResp) throw errorFoto;
+          rutasFinales.push(sb.storage.from("catalogo").getPublicUrl(rutaRespaldo).data.publicUrl);
+        } else {
+          rutasFinales.push(ruta);
+        }
       }
     }
+    d.factura_foto = serializarFotosFactura(rutasFinales);
     const ejecutarGuardado = payload => (id
       ? sb.from("cashea_ventas").update(payload).eq("id", id)
       : sb.from("cashea_ventas").insert(payload));
@@ -894,9 +980,9 @@ async function guardarCashea(e) {
       errorBD = r2.error;
     }
     if (errorBD) throw errorBD;
+    limpiarFormFacturas();
     if (!id) {
-      // La foto ya quedó guardada con la venta: la calculadora ya no la necesita
-      formFactura = { blob: null, path: null };
+      // Las fotos ya quedaron guardadas con la venta: la calculadora ya no las necesita
       adm.calcAplicado = null;
     }
     cerrarModal();
@@ -999,7 +1085,13 @@ document.addEventListener("click", (e) => {
   if (b.dataset.cashea === "estado") return cambiarEstadoCashea(b.dataset.id, b.dataset.estado);
   if (b.dataset.cashea === "exportar") return exportarCashea();
   if (b.dataset.cashea === "quitar-foto") {
-    formFactura.blob = null;
+    const idx = Number(b.dataset.idx);
+    if (Number.isInteger(idx) && idx >= 0 && idx < formFacturas.length) {
+      const [quitada] = formFacturas.splice(idx, 1);
+      if (quitada && quitada.previewUrl) {
+        try { URL.revokeObjectURL(quitada.previewUrl); } catch { /* noop */ }
+      }
+    }
     return pintarFotoFormCashea();
   }
   if (b.dataset.cashea === "pct-toggle") {
@@ -1056,18 +1148,29 @@ document.addEventListener("input", (e) => {
 document.addEventListener("change", async (e) => {
   const t = e.target;
   if (t.id === "casheaFotoSubir") {
-    const archivo = t.files && t.files[0];
+    const archivos = [...(t.files || [])];
     t.value = "";
-    if (!archivo) return;
-    if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
-      return toast("El archivo elegido no es una imagen válida.");
+    if (!archivos.length) return;
+    const cupo = MAX_FOTOS_CASHEA - formFacturas.length;
+    if (cupo <= 0) return toast(`Máximo ${MAX_FOTOS_CASHEA} fotos por venta.`);
+    if (archivos.length > cupo) {
+      toast(`Solo se agregarán ${cupo} foto(s) (máximo ${MAX_FOTOS_CASHEA} por venta).`);
     }
-    try {
-      formFactura.blob = await comprimir(archivo, 1600);
-      await pintarFotoFormCashea();
-    } catch (err) {
-      toast("No se pudo preparar la foto: " + (err.message || "error"));
+    let agregadas = 0;
+    for (const archivo of archivos.slice(0, cupo)) {
+      if (typeof esArchivoImagen === "function" && !esArchivoImagen(archivo)) {
+        toast(`"${archivo.name}" no es una imagen válida.`);
+        continue;
+      }
+      try {
+        const blob = await comprimir(archivo, 1600);
+        formFacturas.push({ tipo: "blob", blob, previewUrl: URL.createObjectURL(blob) });
+        agregadas++;
+      } catch (err) {
+        toast("No se pudo preparar la foto: " + (err.message || "error"));
+      }
     }
+    if (agregadas) await pintarFotoFormCashea();
     return;
   }
   if (t.closest && t.closest("#formCashea")) actualizarResumenCashea(t.form);
