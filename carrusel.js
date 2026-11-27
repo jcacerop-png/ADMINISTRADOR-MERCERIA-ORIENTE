@@ -32,7 +32,10 @@ function pintarCarrusel() {
       <div class="car-acc">
         <button type="button" class="btn sm ghost" data-cmover="${esc(f.id)}" data-d="-1" ${i === 0 ? "disabled" : ""} aria-label="Subir">▲</button>
         <button type="button" class="btn sm ghost" data-cmover="${esc(f.id)}" data-d="1" ${i === car.lista.length - 1 ? "disabled" : ""} aria-label="Bajar">▼</button>
-        <button type="button" class="btn sm ghost" data-cactivo="${esc(f.id)}">${f.activo ? "Ocultar" : "Mostrar"}</button>
+        <button type="button" class="ios-toggle-btn sm" data-cactivo="${esc(f.id)}" role="switch" aria-checked="${!!f.activo}" title="${f.activo ? "Visible en el carrusel (toca para ocultar)" : "Oculta (toca para mostrar)"}">
+          <span class="ios-toggle-lbl">${f.activo ? "Visible" : "Oculta"}</span>
+          <span class="ios-switch ${f.activo ? "on ok" : ""}" aria-hidden="true"><span class="ios-knob"></span></span>
+        </button>
         <button type="button" class="btn sm peligro" data-cborrar="${esc(f.id)}">Quitar</button>
       </div>
     </article>`).join("")

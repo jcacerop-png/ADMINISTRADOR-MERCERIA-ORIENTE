@@ -53,17 +53,129 @@ function cerrarModal() {
   document.body.classList.remove("lock");
 }
 
-/* ---------- Tema claro / oscuro (recordado en el navegador) ---------- */
+/* ---------- Tema claro / oscuro (recordado en el navegador) con interruptor estilo iOS ---------- */
 function aplicarTema(tema) {
+  const esClaro = tema === "claro";
   document.documentElement.dataset.theme = tema;
   try { localStorage.setItem("mo_tema", tema); } catch { /* navegador sin almacenamiento */ }
   $$("[data-tema]").forEach(b => {
-    b.textContent = tema === "oscuro" ? "☀ Tema claro" : "🌙 Tema oscuro";
+    b.classList.add("ios-tema-btn");
+    b.classList.toggle("on", esClaro);
+    b.setAttribute("role", "switch");
+    b.setAttribute("aria-checked", String(esClaro));
+    b.setAttribute("aria-label", esClaro ? "Tema claro activado (cambiar a oscuro)" : "Tema oscuro activado (cambiar a claro)");
+    if (!b.querySelector(".ios-switch")) {
+      b.innerHTML = `
+        <span class="ios-tema-ico" aria-hidden="true">${esClaro ? "☀" : "🌙"}</span>
+        <span class="ios-tema-lbl">${esClaro ? "Tema claro" : "Tema oscuro"}</span>
+        <span class="ios-switch ${esClaro ? "on" : ""}" aria-hidden="true">
+          <span class="ios-knob"></span>
+        </span>`;
+    } else {
+      const ico = b.querySelector(".ios-tema-ico");
+      const lbl = b.querySelector(".ios-tema-lbl");
+      const sw = b.querySelector(".ios-switch");
+      if (ico) ico.textContent = esClaro ? "☀" : "🌙";
+      if (lbl) lbl.textContent = esClaro ? "Tema claro" : "Tema oscuro";
+      if (sw) sw.classList.toggle("on", esClaro);
+    }
   });
 }
 
 function alternarTema() {
   aplicarTema(document.documentElement.dataset.theme === "oscuro" ? "claro" : "oscuro");
+}
+
+/* ---------- Utilidades de variantes (medidas y colores) ---------- */
+// Extrae un valor numérico comparable para ordenar medidas de menor a mayor (ej. "1,5 cm" < "2,0 cm" < "5,0 cm")
+function valorMedidaVariante(etiqueta) {
+  const s = String(etiqueta ?? "").trim().toLowerCase().replace(/,/g, ".");
+  if (!s) return Number.POSITIVE_INFINITY;
+  // Si empieza por Talla #0, #000, #00, #0, #1...
+  const mHash = s.match(/#(0+|[0-9]+)/);
+  const mNum = s.match(/([0-9]+(?:\.[0-9]+)?)/);
+  if (!mNum) return Number.POSITIVE_INFINITY;
+  let val = parseFloat(mNum[1]);
+  if (!Number.isFinite(val)) return Number.POSITIVE_INFINITY;
+  if (/\bmm\b|[0-9]\s*mm/.test(s)) {
+    val = val / 10; // normaliza mm a cm
+  } else if ((/\bmts?\b|\bmetros?\b/.test(s)) && !/cm|mm/.test(s)) {
+    val = val * 100;
+  } else if (/"|pulg/.test(s)) {
+    val = val * 2.54;
+  }
+  if (mHash && mHash[1] && /^0+$/.test(mHash[1]) && val === 0) {
+    // #000 < #00 < #0
+    val = -mHash[1].length * 0.001;
+  }
+  return val;
+}
+
+function compararVariantes(a, b) {
+  const nomA = String((a && a.nombre) ?? a ?? "").trim();
+  const nomB = String((b && b.nombre) ?? b ?? "").trim();
+  const valA = valorMedidaVariante(nomA);
+  const valB = valorMedidaVariante(nomB);
+  const esNumA = Number.isFinite(valA);
+  const esNumB = Number.isFinite(valB);
+  if (esNumA && esNumB && Math.abs(valA - valB) > 1e-6) {
+    return valA - valB;
+  }
+  if (esNumA !== esNumB) return esNumA ? -1 : 1;
+  return nomA.localeCompare(nomB, "es", { numeric: true, sensitivity: "base" });
+}
+
+function ordenarVariantesLista(lista) {
+  return [...(lista || [])].sort(compararVariantes);
+}
+
+// Detecta si el nombre de un producto contiene una medida o talla para agrupar en Producto Base + Variante
+function extraerBaseYVariante(nombreRaw) {
+  const nombre = String(nombreRaw || "").replace(/\s+/g, " ").trim();
+  if (!nombre) return { base: "", variante: "" };
+
+  // Caso 1: Patrón intermedio tipo "CROCHET 3 MM ROLLO 100 MTS NEGRO"
+  let m = nombre.match(/^(.+?)\s+([0-9]+(?:[.,][0-9]+)?\s*(?:MM|CM))\s+(ROLLO\s+.+)$/i);
+  if (m) {
+    return {
+      base: `${m[1].trim()} ${m[3].trim()}`,
+      variante: m[2].replace(/\s+/g, " ").trim().toLowerCase().replace(".", ","),
+    };
+  }
+
+  // Caso 2: Patrón con guion y pulgadas/mm tipo 'K89 - 7,5" 190MM'
+  m = nombre.match(/^([A-Z0-9]+)\s*-\s*([0-9]+(?:[.,][0-9]+)?\s*"\s*[0-9]+\s*MM)$/i);
+  if (m) {
+    return {
+      base: m[1].trim(),
+      variante: m[2].replace(/\s+/g, " ").trim(),
+    };
+  }
+
+  // Caso 3: Medida al final con número de serie opcional tipo "NODRIZA METALICA 20MM #00" o "ARGOLLA NIQUELADA 1,5 CM"
+  m = nombre.match(/^(.+?)\s+([0-9]+(?:[.,][0-9]+)?\s*(?:MM|CM|MTS?|")(?:\s*(?:X\s*[0-9]+(?:[.,][0-9]+)?\s*(?:MM|CM)|#[0-9A-Z]+))?)$/i);
+  if (m && m[1].trim().length >= 3) {
+    const varTxt = m[2].trim()
+      .replace(/\bcm\b/gi, "cm")
+      .replace(/\bmm\b/gi, "mm")
+      .replace(/([0-9])\.(?=[0-9])/g, "$1,");
+    return {
+      base: m[1].trim(),
+      variante: varTxt,
+    };
+  }
+
+  // Caso 4: Talla al final tipo "COPA DE SUJETADOR PUSH-UP TALLA 34" o "TENSOR CON OJAL Y GANCHO TALLA #0"
+  m = nombre.match(/^(.+?)\s+(TALLA\s+#?[0-9A-Z]+)$/i);
+  if (m && m[1].trim().length >= 3) {
+    const varTxt = m[2].trim().replace(/^talla\s+/i, "Talla ");
+    return {
+      base: m[1].trim(),
+      variante: varTxt,
+    };
+  }
+
+  return { base: nombre, variante: "" };
 }
 
 /* ---------- Validar y reducir fotos antes de subirlas ---------- */

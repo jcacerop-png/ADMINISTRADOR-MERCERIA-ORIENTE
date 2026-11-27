@@ -1599,5 +1599,361 @@ body.panel .calc-mini-ini {
   pointer-events: none;
 }
 
+/* ======================================================
+   v19 · Interruptores estilo iOS (iOS-style toggle switch)
+   y Constructor Dinámico de Variantes (Medidas y Colores)
+   ====================================================== */
+.ios-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 46px;
+  height: 26px;
+  flex: 0 0 46px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .16);
+  border: 1.5px solid var(--line);
+  padding: 2px;
+  cursor: pointer;
+  transition: background .28s cubic-bezier(.22, 1, .36, 1), border-color .28s ease, box-shadow .28s ease;
+}
+:root[data-theme="claro"] .ios-switch {
+  background: rgba(0, 0, 0, .14);
+}
+.ios-switch .ios-knob {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  transform: translateX(0);
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1), background .22s ease;
+}
+.ios-switch.on {
+  background: var(--acc);
+  border-color: var(--acc);
+  box-shadow: 0 0 12px rgba(250, 204, 21, .32);
+}
+.ios-switch.on .ios-knob {
+  transform: translateX(20px);
+  background: #0D0D0D;
+}
+.ios-switch.on.ok {
+  background: var(--ok);
+  border-color: var(--ok);
+  box-shadow: 0 0 12px rgba(34, 197, 94, .35);
+}
+.ios-switch.on.ok .ios-knob {
+  background: #FFFFFF;
+}
+
+.ios-tog,
+.ios-toggle-wrap {
+  display: inline-flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.ios-toggle-txt {
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 72px;
+}
+.ios-toggle-txt.ok {
+  color: var(--ok);
+}
+.ios-toggle-txt.agotado {
+  color: var(--malo);
+}
+
+.ios-toggle-btn,
+.ios-tema-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.ios-toggle-btn:hover,
+.ios-tema-btn:hover {
+  border-color: var(--acc);
+  background: rgba(250, 204, 21, .08);
+}
+.ios-toggle-btn.sm .ios-switch {
+  width: 38px;
+  height: 22px;
+  flex: 0 0 38px;
+}
+.ios-toggle-btn.sm .ios-switch .ios-knob {
+  width: 15px;
+  height: 15px;
+}
+.ios-toggle-btn.sm .ios-switch.on .ios-knob {
+  transform: translateX(16px);
+}
+
+/* ---------- Foto principal del producto base ---------- */
+.foto-base-bloque {
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, .02);
+}
+.foto-base-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.foto-base-preview {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid var(--acc);
+  background: var(--foto);
+  flex: 0 0 136px;
+}
+.foto-base-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.foto-base-badge {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: rgba(13, 13, 13, .85);
+}
+.foto-base-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.subir-principal {
+  width: 100%;
+  min-height: 130px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border-color: rgba(250, 204, 21, .55);
+  background: rgba(250, 204, 21, .05);
+}
+.subir-principal:hover {
+  background: rgba(250, 204, 21, .12);
+  border-color: var(--acc);
+}
+.subir-ico {
+  font-size: 26px;
+}
+
+/* ---------- Constructor dinámico de variantes ---------- */
+.var-builder {
+  border-color: rgba(250, 204, 21, .4);
+  background: rgba(250, 204, 21, .03);
+  gap: 12px;
+}
+.var-builder-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.var-builder-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.var-lote-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed var(--line);
+  background: var(--bg);
+}
+.var-lote-bar input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.var-encabezados {
+  display: grid;
+  grid-template-columns: 78px 1.5fr 1fr 86px 158px 34px;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.var-lista-filas {
+  display: grid;
+  gap: 8px;
+}
+.fila-var-v2 {
+  display: grid;
+  grid-template-columns: 78px 1.5fr 1fr 86px 158px 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  transition: border-color .2s, opacity .2s;
+}
+.fila-var-v2:hover {
+  border-color: rgba(250, 204, 21, .55);
+}
+.fila-var-v2.var-agotada {
+  opacity: .72;
+  border-style: dashed;
+}
+.var-orden-btns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.var-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  min-width: 22px;
+}
+.btn-mini-ord {
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.btn-mini-ord:hover:not(:disabled) {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: #0D0D0D;
+}
+.btn-mini-ord:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+.var-col-lbl {
+  margin: 0;
+  gap: 3px;
+}
+.var-movil-lbl {
+  display: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+.var-del-btn {
+  justify-self: center;
+}
+
+/* Pastillas de variantes en la tarjeta del panel admin */
+.adm-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.adm-vars-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 4px 0;
+}
+.adm-var-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  border: 1px solid var(--line);
+  background: rgba(250, 204, 21, .08);
+  color: var(--ink);
+}
+.adm-var-chip.off {
+  opacity: .55;
+  text-decoration: line-through;
+  border-color: var(--malo);
+}
+.adm-var-chip.mas {
+  background: transparent;
+  color: var(--muted);
+}
+.unificar-lista {
+  display: grid;
+  gap: 10px;
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.unificar-item {
+  padding: 12px 14px;
+}
+.unificar-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.unificar-item-head h4 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+@media (max-width: 720px) {
+  .var-encabezados {
+    display: none;
+  }
+  .fila-var-v2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+  }
+  .var-movil-lbl {
+    display: block;
+  }
+  .var-orden-btns {
+    grid-column: 1 / 2;
+  }
+  .var-del-btn {
+    grid-column: 2 / 3;
+    justify-self: end;
+  }
+  .var-col-disp {
+    grid-column: 1 / -1;
+    padding-top: 4px;
+  }
+}
+
+
 
 

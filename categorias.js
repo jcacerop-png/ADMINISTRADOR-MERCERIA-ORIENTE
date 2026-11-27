@@ -42,7 +42,10 @@ function dibujarCategorias() {
           <span class="agarre" draggable="true" title="Arrastra para ordenar" aria-hidden="true">⠿</span>
           <input class="cat-nombre" value="${esc(c.nombre || c.codigo)}" maxlength="60" data-cat-nombre="${esc(c.codigo)}" aria-label="Nombre de la categoría">
           <span class="muted small cat-n">${n} producto(s)${oculta ? " · oculta" : ""}</span>
-          <button type="button" class="btn sm ghost" data-cat-accion="visible" data-id="${esc(c.codigo)}">${oculta ? "Mostrar" : "Ocultar"}</button>
+          <button type="button" class="ios-toggle-btn sm" data-cat-accion="visible" data-id="${esc(c.codigo)}" role="switch" aria-checked="${!oculta}" title="${oculta ? "Categoría oculta (toca para mostrar)" : "Categoría visible (toca para ocultar)"}">
+            <span class="ios-toggle-lbl">${oculta ? "Oculta" : "Visible"}</span>
+            <span class="ios-switch ${oculta ? "" : "on ok"}" aria-hidden="true"><span class="ios-knob"></span></span>
+          </button>
           <button type="button" class="btn sm ghost" data-cat-accion="subir" data-id="${esc(c.codigo)}" ${i === 0 ? "disabled" : ""} aria-label="Subir">▲</button>
           <button type="button" class="btn sm ghost" data-cat-accion="bajar" data-id="${esc(c.codigo)}" ${i === ultimo ? "disabled" : ""} aria-label="Bajar">▼</button>
           <button type="button" class="btn sm peligro" data-cat-accion="borrar" data-id="${esc(c.codigo)}" ${n > 0 ? "disabled" : ""} title="${n > 0 ? "Tiene productos: muévelos o ponla oculta" : "Borrar categoría"}">Borrar</button>

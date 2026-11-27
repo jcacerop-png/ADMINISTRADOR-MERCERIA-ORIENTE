@@ -27,13 +27,40 @@ const adm = {
   tab: "inicio"         // pestaña abierta (para refrescar solo lo que se ve)
 };
 
-const stockDe = p => (Array.isArray(p.variantes) ? p.variantes : []).reduce((a, v) => a + (Number(v.stock) || 0), 0);
+const varianteDispAdm = v => (v && typeof v.disponible === "boolean") ? v.disponible : (Number(v && v.stock) || 0) > 0;
+const stockDe = p => {
+  const vars = Array.isArray(p.variantes) ? p.variantes : [];
+  if (!vars.length) return 1;
+  return vars.reduce((a, v) => {
+    const st = Number(v.stock);
+    if (Number.isFinite(st) && st > 0) return a + st;
+    return a + (varianteDispAdm(v) ? 1 : 0);
+  }, 0);
+};
 const fotoDe = p => (Array.isArray(p.fotos) && p.fotos[0]) || "";
 const plantillaDe = tipo => adm.tipos.find(t => t.codigo === tipo) || { campos: [], accesorios: [], usos: [] };
 const lineasDe = t => String(t || "").split("\n").map(s => s.trim()).filter(Boolean);
 const fechaHora = iso => new Date(iso).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const kpi = (titulo, valor, extra = "") => `<div class="card kpi" ${extra}><small>${titulo}</small><strong>${valor}</strong></div>`;
-const variantesPorDefecto = () => [{ nombre: "Única", stock: 0 }];
+const variantesPorDefecto = (precioBase = "") => [{
+  nombre: "Única",
+  precio: precioBase !== "" && precioBase !== null && precioBase !== undefined ? precioBase : "",
+  disponible: true,
+  stock: 1,
+}];
+
+function textoPrecioProductoAdm(p) {
+  const vars = Array.isArray(p.variantes) ? p.variantes : [];
+  const precios = vars
+    .map(v => (v && v.precio !== undefined && v.precio !== null && v.precio !== "") ? Number(v.precio) : Number(p.precio))
+    .filter(n => Number.isFinite(n) && n >= 0);
+  if (precios.length > 1) {
+    const min = Math.min(...precios);
+    const max = Math.max(...precios);
+    if (Math.abs(max - min) >= 0.005) return `${usd(min)} – ${usd(max)}`;
+  }
+  return usd(precios[0] ?? p.precio);
+}
 
 /* ---------- Login y animaciones ---------- */
 function actualizarRol() {
@@ -357,6 +384,15 @@ function pintarInicio() {
 function tarjetaAdm(p) {
   const s = stockDe(p);
   const foto = fotoDe(p);
+  const vars = Array.isArray(p.variantes) ? p.variantes : [];
+  const tieneVariantesMultiples = vars.length > 1 || (vars.length === 1 && vars[0].nombre && normaTexto(vars[0].nombre) !== "unica");
+  const varsResumen = tieneVariantesMultiples
+    ? `<div class="adm-vars-pills">${vars.slice(0, 6).map(v => {
+        const disp = varianteDispAdm(v);
+        const pr = (v.precio !== undefined && v.precio !== null && v.precio !== "") ? Number(v.precio) : Number(p.precio);
+        return `<span class="adm-var-chip ${disp ? "ok" : "off"}" title="${esc(v.nombre)} · ${usd(pr)} · ${disp ? "Disponible" : "Agotado"}">${esc(v.nombre)} · <b>${usd(pr)}</b></span>`;
+      }).join("")}${vars.length > 6 ? `<span class="adm-var-chip mas">+${vars.length - 6} más</span>` : ""}</div>`
+    : "";
   return `
   <article class="card prod-adm ${p.activo ? "" : "oculto"}">
     <div class="foto">
@@ -368,16 +404,22 @@ function tarjetaAdm(p) {
            </label>`}
     </div>
     <div class="cuerpo">
-      <span class="tipo">${esc(CATEGORIAS[p.tipo] || "")}${p.codigo ? ` · <b>${esc(p.codigo)}</b>` : ""}${p.activo ? "" : " · oculto"}${p.destacado ? " · ★ destacado" : ""}</span>
+      <div class="adm-head-row">
+        <span class="tipo">${esc(CATEGORIAS[p.tipo] || "")}${p.codigo ? ` · <b>${esc(p.codigo)}</b>` : ""}${p.destacado ? " · ★ destacado" : ""}</span>
+        <button type="button" class="ios-toggle-btn sm" data-action="activo" data-id="${esc(p.id)}" role="switch" aria-checked="${!!p.activo}" title="${p.activo ? "Publicado en el catálogo (toca para ocultar)" : "Oculto (toca para publicar)"}">
+          <span class="ios-toggle-lbl">${p.activo ? "Publicado" : "Oculto"}</span>
+          <span class="ios-switch ${p.activo ? "on ok" : ""}" aria-hidden="true"><span class="ios-knob"></span></span>
+        </button>
+      </div>
       <h3>${esc(p.nombre)}</h3>
+      ${varsResumen}
       <div class="fila-precio">
-        <strong>${usd(p.precio)}</strong>
-        <span class="pill ${s > 0 ? "ok" : "agotado"}">${s} ud.</span>
+        <strong>${textoPrecioProductoAdm(p)}</strong>
+        <span class="pill ${s > 0 ? "ok" : "agotado"}">${s > 0 ? `Disponible (${s} ud.)` : "Agotado"}</span>
       </div>
       <div class="acciones-card">
         <button class="btn sm" data-action="editar" data-id="${esc(p.id)}">Editar</button>
-        <label class="btn sm ghost btn-file" style="cursor:pointer" title="Subir y publicar foto">+ Foto<input type="file" accept="image/*" data-foto-rapida="${esc(p.id)}" class="sr"></label>
-        <button class="btn sm ghost" data-action="activo" data-id="${esc(p.id)}">${p.activo ? "Ocultar" : "Publicar"}</button>
+        <label class="btn sm ghost btn-file" style="cursor:pointer" title="Subir o cambiar foto principal">+ Foto<input type="file" accept="image/*" data-foto-rapida="${esc(p.id)}" class="sr"></label>
         <button class="btn sm ghost" data-action="duplicar" data-id="${esc(p.id)}">Duplicar</button>
         <button class="btn sm peligro" data-action="borrar" data-id="${esc(p.id)}">Eliminar</button>
       </div>
@@ -471,6 +513,7 @@ function formNuevo(tipo) {
 }
 
 function formDesde(p) {
+  const varsRaw = Array.isArray(p.variantes) && p.variantes.length ? p.variantes : variantesPorDefecto(p.precio);
   return {
     id: p.id,
     tipo: p.tipo || "otro",
@@ -487,7 +530,17 @@ function formDesde(p) {
     accesorios: [...(p.accesorios || [])],
     usos: [...(p.usos || [])],
     documentos: (p.documentos || []).map(d => ({ nombre: d.nombre || "", url: d.url || "" })),
-    variantes: (p.variantes || []).map(v => ({ nombre: v.nombre || "", stock: v.stock ?? 0 })),
+    variantes: varsRaw.map(v => {
+      const disp = typeof v.disponible === "boolean" ? v.disponible : (Number(v.stock) || 0) > 0;
+      const st = Number(v.stock);
+      return {
+        nombre: v.nombre || "",
+        precio: v.precio !== undefined && v.precio !== null && v.precio !== "" ? v.precio : (p.precio ?? ""),
+        disponible: disp,
+        stock: Number.isFinite(st) && st >= 0 ? st : (disp ? 1 : 0),
+        codigo: v.codigo || "",
+      };
+    }),
   };
 }
 
@@ -503,55 +556,151 @@ function dibujarFormulario() {
   if (!f) return;
   const opcionesTipo = Object.entries(CATEGORIAS)
     .map(([k, l]) => `<option value="${k}" ${f.tipo === k ? "selected" : ""}>${esc(l)}</option>`).join("");
+  const fotoPrincipal = f.fotos[0] || "";
+  const fotosExtra = f.fotos.slice(1);
 
   $("#modal .sheet").innerHTML = `
   <form id="formProd" class="stack" novalidate>
     <div class="sheet-head">
-      <h2>${f.id ? "Editar producto" : "Nuevo producto"}</h2>
+      <h2>${f.id ? "Editar producto base y variantes" : "Nuevo producto base y variantes"}</h2>
       <button type="button" class="x" data-cerrar aria-label="Cerrar">✕</button>
     </div>
 
-    <div>
-      <p class="label">Fotos · la primera es la principal (máximo ${MAX_FOTOS})</p>
-      <div class="fotos-pf">
-        ${f.fotos.map((u, i) => `
-          <div class="foto-pf">
-            <img src="${esc(u)}" data-zoom="${esc(u)}" alt="Foto ${i + 1}">
-            <div class="acc-foto">
-              ${i === 0
-                ? `<span class="pill ok">Principal</span>`
-                : `<button type="button" class="btn sm ghost" data-action="foto-principal" data-i="${i}">Hacer principal</button>`}
-              <button type="button" class="btn sm peligro" data-action="quitar-foto" data-i="${i}">Quitar</button>
-            </div>
-          </div>`).join("")}
-        ${f.fotos.length < MAX_FOTOS
-          ? `<label class="subir btn-file">+ Subir fotos<input type="file" id="fotosIn" accept="image/*" multiple class="sr"></label>`
-          : ""}
+    <div class="foto-base-bloque">
+      <p class="label">Foto principal del producto base</p>
+      <p class="hint">Sube una sola foto principal representativa para el producto base (ej. “Argolla Niquelada” o “Cierre”). Todas sus medidas o colores compartirán esta tarjeta.</p>
+      <div class="foto-base-card">
+        ${fotoPrincipal ? `
+          <div class="foto-base-preview">
+            <img src="${esc(fotoPrincipal)}" data-zoom="${esc(fotoPrincipal)}" alt="Foto principal">
+            <span class="pill ok foto-base-badge">Foto principal</span>
+          </div>
+          <div class="foto-base-acciones">
+            <label class="btn sm btn-file" style="cursor:pointer">
+              ↻ Reemplazar foto principal
+              <input type="file" id="fotoPrincipalIn" accept="image/*" class="sr">
+            </label>
+            <button type="button" class="btn sm peligro" data-action="quitar-foto" data-i="0">Quitar foto</button>
+            ${f.fotos.length < MAX_FOTOS ? `
+              <label class="btn sm ghost btn-file" style="cursor:pointer">
+                + Foto adicional (opcional)
+                <input type="file" id="fotosIn" accept="image/*" multiple class="sr">
+              </label>` : ""}
+          </div>
+        ` : `
+          <label class="subir subir-principal btn-file">
+            <span class="subir-ico">📷</span>
+            <strong>+ Subir foto principal del producto</strong>
+            <small class="muted">JPG, PNG o WebP · Se optimiza y guarda automáticamente</small>
+            <input type="file" id="fotoPrincipalIn" accept="image/*" class="sr">
+          </label>
+        `}
       </div>
-      <p class="hint">${adm.subiendoFoto ? "Subiendo foto(s), espera un momento…" : "Las fotos se suben y guardan en cuanto las eliges."}</p>
+      ${fotosExtra.length ? `
+        <div class="fotos-pf" style="margin-top:10px">
+          ${fotosExtra.map((u, idx) => {
+            const i = idx + 1;
+            return `
+            <div class="foto-pf">
+              <img src="${esc(u)}" data-zoom="${esc(u)}" alt="Foto ${i + 1}">
+              <div class="acc-foto">
+                <button type="button" class="btn sm ghost" data-action="foto-principal" data-i="${i}">Hacer principal</button>
+                <button type="button" class="btn sm peligro" data-action="quitar-foto" data-i="${i}">Quitar</button>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>` : ""}
+      <p class="hint" style="margin-top:6px">${adm.subiendoFoto ? "Subiendo foto, espera un momento…" : "La foto se sube y publica en cuanto la eliges."}</p>
     </div>
 
     <div class="grid-form">
-      <label>Código (único)<input data-b="codigo" maxlength="40" autocomplete="off" placeholder="Ej. 1001" value="${esc(f.codigo)}"></label>
-      <label>Tipo<select data-b="tipo">${opcionesTipo}</select></label>
+      <label>Código base (opcional / único)<input data-b="codigo" maxlength="40" autocomplete="off" placeholder="Ej. ACC-M-001" value="${esc(f.codigo)}"></label>
+      <label>Categoría<select data-b="tipo">${opcionesTipo}</select></label>
     </div>
-    <label>Nombre<input data-b="nombre" maxlength="120" value="${esc(f.nombre)}"></label>
-    <label>Descripción<textarea data-b="descripcion" rows="3" maxlength="1000">${esc(f.descripcion)}</textarea></label>
+    <label>Nombre del producto base<input data-b="nombre" maxlength="120" placeholder="Ej. Argolla Niquelada, Cierre, Trabilla…" value="${esc(f.nombre)}"></label>
+    <label>Descripción<textarea data-b="descripcion" rows="2" maxlength="1000" placeholder="Descripción general del producto…">${esc(f.descripcion)}</textarea></label>
 
     <div class="grid-form tres">
-      <label>Precio de venta (USD) · lo ve la clienta<input data-b="precio" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.precio))}"></label>
-      <label>Precio al por mayor (USD) · solo en el panel<input data-b="precio_mayor" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.precio_mayor))}"></label>
-      <label>Costo (USD) · solo en el panel<input data-b="costo" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.costo))}"></label>
+      <label>Precio base / desde (USD)<input data-b="precio" type="text" inputmode="decimal" autocomplete="off" placeholder="0,07" value="${esc(escribirPrecio(f.precio))}"></label>
+      <label>Precio al por mayor (USD) · solo panel<input data-b="precio_mayor" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.precio_mayor))}"></label>
+      <label>Costo (USD) · solo panel<input data-b="costo" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(escribirPrecio(f.costo))}"></label>
     </div>
 
     <div class="tog-row">
-      <label class="tog"><input type="checkbox" data-b="destacado" ${f.destacado ? "checked" : ""}> Destacado</label>
-      <label class="tog"><input type="checkbox" data-b="activo" ${f.activo ? "checked" : ""}> Publicado en el catálogo</label>
+      <label class="tog ios-tog">
+        <input type="checkbox" class="sr" data-b="destacado" ${f.destacado ? "checked" : ""}>
+        <span class="ios-switch ${f.destacado ? "on" : ""}" aria-hidden="true"><span class="ios-knob"></span></span>
+        <span>★ Producto destacado</span>
+      </label>
+      <label class="tog ios-tog">
+        <input type="checkbox" class="sr" data-b="activo" ${f.activo ? "checked" : ""}>
+        <span class="ios-switch ${f.activo ? "on ok" : ""}" aria-hidden="true"><span class="ios-knob"></span></span>
+        <span>Publicado en el catálogo</span>
+      </label>
     </div>
+
+    <fieldset class="bloque var-builder">
+      <legend>Constructor de variantes (Medidas y Colores)</legend>
+      <div class="var-builder-cab">
+        <p class="hint" style="margin:0">Agrega múltiples medidas (ej. <b>1,5 cm</b>, <b>2,0 cm</b>, <b>3,0 cm</b>) o colores (ej. <b>Rojo</b>, <b>Negro</b>, <b>Blanco</b>) con su <b>precio individual en USD</b> y su interruptor <b>Disponible / Agotado</b>.</p>
+        <div class="var-builder-acciones">
+          <button type="button" class="btn sm ghost" data-action="ordenar-var" title="Ordenar automáticamente de la medida más pequeña a la más grande">⇅ Ordenar menor a mayor</button>
+          <button type="button" class="btn sm" data-action="agregar-var">+ Agregar variante</button>
+        </div>
+      </div>
+
+      <div class="var-lote-bar">
+        <input id="varLoteInput" type="text" placeholder="Carga rápida separada por comas: ej. 1,5 cm, 2,0 cm, 2,5 cm, 3,0 cm o Rojo, Negro, Blanco" autocomplete="off">
+        <button type="button" class="btn sm ghost" data-action="lote-var">+ Crear opciones</button>
+      </div>
+
+      <div class="var-encabezados" aria-hidden="true">
+        <span>Orden</span>
+        <span>Etiqueta (Medida o Color)</span>
+        <span>Precio individual (USD)</span>
+        <span>Stock</span>
+        <span>Estado (Disponible / Agotado)</span>
+        <span></span>
+      </div>
+
+      <div class="var-lista-filas">
+        ${f.variantes.map((v, i) => {
+          const disp = v.disponible !== false;
+          return `
+          <div class="fila-var-v2 ${disp ? "" : "var-agotada"}" data-var-row="${i}">
+            <div class="var-orden-btns">
+              <span class="var-num">#${i + 1}</span>
+              <button type="button" class="btn-mini-ord" data-action="subir-var" data-i="${i}" ${i === 0 ? "disabled" : ""} title="Subir opción" aria-label="Subir">▲</button>
+              <button type="button" class="btn-mini-ord" data-action="bajar-var" data-i="${i}" ${i === f.variantes.length - 1 ? "disabled" : ""} title="Bajar opción" aria-label="Bajar">▼</button>
+            </div>
+            <label class="var-col-lbl">
+              <span class="var-movil-lbl">Medida o Color</span>
+              <input data-arr="var" data-i="${i}" data-k="nombre" value="${esc(v.nombre)}" placeholder="Ej. 1,5 cm o Rojo" aria-label="Etiqueta de la variante">
+            </label>
+            <label class="var-col-lbl">
+              <span class="var-movil-lbl">Precio USD ($)</span>
+              <input data-arr="var" data-i="${i}" data-k="precio" type="text" inputmode="decimal" autocomplete="off" placeholder="${esc(escribirPrecio(f.precio) || "0,00")}" value="${esc(escribirPrecio(v.precio))}" aria-label="Precio individual en USD">
+            </label>
+            <label class="var-col-lbl var-col-stock">
+              <span class="var-movil-lbl">Existencias</span>
+              <input data-arr="var" data-i="${i}" data-k="stock" type="number" min="0" step="1" inputmode="numeric" value="${esc(v.stock)}" aria-label="Existencias">
+            </label>
+            <div class="var-col-disp">
+              <label class="ios-toggle-wrap">
+                <input type="checkbox" class="sr" data-arr="var" data-i="${i}" data-k="disponible" ${disp ? "checked" : ""}>
+                <span class="ios-switch ${disp ? "on ok" : ""}" aria-hidden="true"><span class="ios-knob"></span></span>
+                <span class="ios-toggle-txt ${disp ? "ok" : "agotado"}" data-var-disp-txt="${i}">${disp ? "Disponible" : "Agotado"}</span>
+              </label>
+            </div>
+            <button type="button" class="x var-del-btn" data-action="quitar-var" data-i="${i}" title="Quitar variante" aria-label="Quitar">✕</button>
+          </div>`;
+        }).join("")}
+      </div>
+    </fieldset>
 
     <fieldset class="bloque">
       <legend>Características</legend>
-      <p class="hint">Vienen de la plantilla de su tipo. Puedes cambiar el nombre, el valor, o agregar y quitar filas.</p>
+      <p class="hint">Vienen de la plantilla de su categoría. Puedes cambiar el nombre, el valor, o agregar y quitar filas.</p>
       ${f.caracteristicas.map((c, i) => `
         <div class="fila-car">
           <input data-arr="car" data-i="${i}" data-k="campo" value="${esc(c.campo)}" aria-label="Nombre de la característica">
@@ -564,25 +713,13 @@ function dibujarFormulario() {
     <fieldset class="bloque">
       <legend>Accesorios incluidos</legend>
       <p class="hint">Uno por línea.</p>
-      <textarea data-b="accesorios" rows="4">${esc(f.accesorios.join("\n"))}</textarea>
+      <textarea data-b="accesorios" rows="3">${esc(f.accesorios.join("\n"))}</textarea>
     </fieldset>
 
     <fieldset class="bloque">
       <legend>Usos</legend>
       <p class="hint">Uno por línea.</p>
-      <textarea data-b="usos" rows="3">${esc(f.usos.join("\n"))}</textarea>
-    </fieldset>
-
-    <fieldset class="bloque">
-      <legend>Existencias por variante</legend>
-      <p class="hint">Colores, modelos o “Única”. La clienta solo ve Disponible o Agotado.</p>
-      ${f.variantes.map((v, i) => `
-        <div class="fila-var">
-          <input data-arr="var" data-i="${i}" data-k="nombre" value="${esc(v.nombre)}" aria-label="Nombre de la variante">
-          <input data-arr="var" data-i="${i}" data-k="stock" type="number" min="0" step="1" inputmode="numeric" value="${esc(v.stock)}" aria-label="Existencias">
-          <button type="button" class="x" data-action="quitar-var" data-i="${i}" aria-label="Quitar">✕</button>
-        </div>`).join("")}
-      <div><button type="button" class="btn sm ghost" data-action="agregar-var">+ Variante</button></div>
+      <textarea data-b="usos" rows="2">${esc(f.usos.join("\n"))}</textarea>
     </fieldset>
 
     <fieldset class="bloque">
@@ -599,17 +736,19 @@ function dibujarFormulario() {
 
     <div class="acciones-sheet">
       <button type="button" class="btn ghost" data-cerrar>Cancelar</button>
-      <button class="btn" type="submit" ${adm.subiendoFoto ? "disabled" : ""}>${adm.subiendoFoto ? "Subiendo foto…" : "Guardar"}</button>
+      <button class="btn" type="submit" ${adm.subiendoFoto ? "disabled" : ""}>${adm.subiendoFoto ? "Subiendo foto…" : "Guardar producto"}</button>
     </div>
   </form>`;
 }
 
-async function subirFotos(files) {
+async function subirFotos(files, reemplazarPrincipal = false) {
   const f = adm.form;
   const lista = [...(files || [])];
   if (!f || !lista.length) return;
-  const libres = MAX_FOTOS - f.fotos.length;
-  if (libres <= 0) return toast(`Máximo ${MAX_FOTOS} fotos por producto`);
+  if (!reemplazarPrincipal) {
+    const libres = MAX_FOTOS - f.fotos.length;
+    if (libres <= 0) return toast(`Máximo ${MAX_FOTOS} fotos por producto`);
+  }
 
   const teniaFotos = f.fotos.length > 0;
   adm.subiendoFoto = true;
@@ -617,12 +756,13 @@ async function subirFotos(files) {
   let subidas = 0;
 
   try {
-    for (const file of lista.slice(0, libres)) {
+    const archivosProcesar = reemplazarPrincipal ? lista.slice(0, 1) : lista.slice(0, MAX_FOTOS - f.fotos.length);
+    for (const file of archivosProcesar) {
       const valida = typeof esArchivoImagen === "function" ? esArchivoImagen(file) : (file.type || "").startsWith("image/");
       if (!valida) { toast("Solo se pueden subir imágenes (JPG, PNG o WebP)"); continue; }
       if (file.size > 20 * 1024 * 1024) { toast("Esa foto pesa más de 20 MB"); continue; }
       try {
-        toast("Subiendo foto…");
+        toast("Subiendo foto principal…");
         const blob = await comprimir(file, 1200);
         const uid = typeof uuidSeguro === "function" ? uuidSeguro() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const ruta = `productos/${uid}.jpg`;
@@ -632,7 +772,13 @@ async function subirFotos(files) {
           upsert: true,
         });
         if (error) throw error;
-        f.fotos.push(sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl);
+        const urlPub = sb.storage.from("catalogo").getPublicUrl(ruta).data.publicUrl;
+        if (reemplazarPrincipal) {
+          if (f.fotos.length > 0) f.fotos[0] = urlPub;
+          else f.fotos.push(urlPub);
+        } else {
+          f.fotos.push(urlPub);
+        }
         subidas++;
       } catch (err) {
         toast("No se pudo subir la foto: " + (err.message || "error"));
@@ -640,19 +786,17 @@ async function subirFotos(files) {
     }
 
     if (subidas > 0) {
-      // Si el producto estaba oculto por no tener foto, al agregarle foto se activa automáticamente
       if (!teniaFotos && f.fotos.length > 0) f.activo = true;
-      // Si el producto ya existe en la base de datos, persiste las fotos de inmediato
       if (f.id) {
         const { error: errUpd } = await sb.from("productos")
           .update({ fotos: f.fotos, activo: f.activo, actualizado_en: new Date().toISOString() })
           .eq("id", f.id);
         if (!errUpd) {
-          toast(subidas === 1 ? "Foto subida y guardada ✔" : `${subidas} fotos subidas y guardadas ✔`);
+          toast("Foto principal subida y guardada ✔");
           await cargar();
         }
       } else {
-        toast(subidas === 1 ? "Foto lista ✔" : `${subidas} fotos listas ✔`);
+        toast("Foto principal lista ✔");
       }
     }
   } finally {
@@ -728,16 +872,63 @@ async function guardarProducto(e) {
   const btn = $("#formProd [type=submit]");
 
   const nombre = String(f.nombre || "").trim();
-  if (!nombre) return toast("Escribe el nombre del producto");
-  if (!CATEGORIAS[f.tipo]) return toast("Elige el tipo de producto");
-  const precio = leerPrecio(f.precio);
-  if (precio === null) return toast("Revisa el precio en dólares (ejemplo: 12,50)");
+  if (!nombre) return toast("Escribe el nombre del producto base");
+  if (!CATEGORIAS[f.tipo]) return toast("Elige la categoría del producto");
+
+  let precioBase = leerPrecio(f.precio);
   const costo = String(f.costo ?? "").trim() === "" ? 0 : leerPrecio(f.costo);
   if (costo === null) return toast("Revisa el costo (ejemplo: 5,00)");
   const textoMayor = String(f.precio_mayor ?? "").trim();
   const precioMayor = textoMayor === "" ? null : leerPrecio(textoMayor);
   if (textoMayor !== "" && precioMayor === null) return toast("Revisa el precio al por mayor (ejemplo: 9,00)");
   const codigo = String(f.codigo ?? "").trim().slice(0, 40) || null;
+
+  // Normalizar variantes con precio individual y disponibilidad
+  const variantesPreparadas = [];
+  for (let idx = 0; idx < (f.variantes || []).length; idx++) {
+    const v = f.variantes[idx];
+    const nomVar = String(v.nombre || "").trim() || ((f.variantes.length === 1) ? "Única" : "");
+    if (!nomVar) continue;
+    const textoPr = String(v.precio ?? "").trim();
+    const prVar = textoPr === "" ? precioBase : leerPrecio(textoPr);
+    if (prVar === null) {
+      return toast(`Revisa el precio en USD de la variante "${nomVar}" (ejemplo: 0,07)`);
+    }
+    const disp = v.disponible !== false;
+    const stRaw = parseInt(v.stock, 10);
+    const stockFinal = !disp ? 0 : (Number.isFinite(stRaw) && stRaw > 0 ? stRaw : 1);
+    variantesPreparadas.push({
+      nombre: nomVar.slice(0, 80),
+      precio: prVar,
+      disponible: disp,
+      stock: stockFinal,
+      codigo: v.codigo ? String(v.codigo).trim().slice(0, 40) : undefined,
+      orden: variantesPreparadas.length + 1,
+    });
+  }
+
+  if (!variantesPreparadas.length) {
+    if (precioBase === null) return toast("Revisa el precio en dólares (ejemplo: 12,50)");
+    variantesPreparadas.push({
+      nombre: "Única",
+      precio: precioBase,
+      disponible: true,
+      stock: 1,
+      orden: 1,
+    });
+  }
+
+  // Si el precio base quedó vacío, usa el precio de la primera variante disponible (o la primera variante)
+  const primeraDisp = variantesPreparadas.find(v => v.disponible) || variantesPreparadas[0];
+  if (precioBase === null) {
+    precioBase = primeraDisp && Number.isFinite(primeraDisp.precio) ? primeraDisp.precio : null;
+  }
+  if (precioBase === null) return toast("Revisa el precio en dólares (ejemplo: 0,07)");
+
+  // Rellenar cualquier variante que aún no tuviera precio con precioBase
+  variantesPreparadas.forEach(v => {
+    if (!Number.isFinite(v.precio)) v.precio = precioBase;
+  });
 
   const documentos = f.documentos
     .map(d => ({ nombre: String(d.nombre || "").trim(), url: String(d.url || "").trim() }))
@@ -752,7 +943,7 @@ async function guardarProducto(e) {
     tipo: f.tipo,
     descripcion: String(f.descripcion || "").trim().slice(0, 1000),
     codigo,
-    precio,
+    precio: precioBase,
     precio_mayor: precioMayor,
     costo,
     destacado: !!f.destacado,
@@ -764,9 +955,7 @@ async function guardarProducto(e) {
     accesorios: f.accesorios,
     usos: f.usos,
     documentos,
-    variantes: f.variantes
-      .map(v => ({ nombre: String(v.nombre || "").trim(), stock: Math.max(0, parseInt(v.stock, 10) || 0) }))
-      .filter(v => v.nombre),
+    variantes: variantesPreparadas,
     actualizado_en: new Date().toISOString(),
   };
 
@@ -783,7 +972,7 @@ async function guardarProducto(e) {
   }
   adm.form = null;
   cerrarModal();
-  toast("Producto guardado ✔");
+  toast("Producto y variantes guardados ✔");
   await cargar();
 }
 
@@ -827,13 +1016,143 @@ async function duplicarProducto(id) {
     accesorios: [...(p.accesorios || [])],
     usos: [...(p.usos || [])],
     documentos: (p.documentos || []).map(d => ({ nombre: d.nombre, url: d.url })),
-    variantes: (p.variantes || []).map(v => ({ nombre: v.nombre, stock: 0 })),
+    variantes: (p.variantes || []).map((v, idx) => ({
+      nombre: v.nombre,
+      precio: v.precio ?? p.precio,
+      disponible: true,
+      stock: Number(v.stock) || 1,
+      orden: idx + 1,
+    })),
     actualizado_en: new Date().toISOString(),
   };
   const { error } = await sb.from("productos").insert(copia);
   if (error) return toast("No se pudo duplicar: " + error.message);
   toast("Copia creada (oculta). Edítala y publícala cuando quieras ✔");
   await cargar();
+}
+
+/* ---------- Unificador inteligente de Productos Base + Variantes ---------- */
+function detectarGruposVariantes() {
+  const mapa = new Map();
+  // Agrupa productos activos (o con foto) que comparten el mismo nombre base y categoría y tienen medida/talla en su nombre
+  for (const p of adm.productos) {
+    if (!p.activo) continue;
+    const { base, variante } = typeof extraerBaseYVariante === "function"
+      ? extraerBaseYVariante(p.nombre)
+      : { base: p.nombre, variante: "" };
+    if (!variante) continue;
+    const clave = `${p.tipo}::${normaTexto(base)}`;
+    if (!mapa.has(clave)) {
+      mapa.set(clave, { clave, base, tipo: p.tipo, items: [] });
+    }
+    mapa.get(clave).items.push({ p, etiqueta: variante });
+  }
+  const grupos = [];
+  for (const g of mapa.values()) {
+    if (g.items.length < 2) continue;
+    const ordenados = [...g.items].sort((a, b) => compararVariantes(a.etiqueta, b.etiqueta));
+    const principal = ordenados.find(x => fotoDe(x.p))?.p || ordenados[0].p;
+    const variantes = ordenados.map((x, idx) => {
+      const disp = stockDe(x.p) > 0;
+      return {
+        nombre: x.etiqueta,
+        precio: Number(x.p.precio) || 0,
+        disponible: disp,
+        stock: Math.max(disp ? 1 : 0, stockDe(x.p)),
+        codigo: x.p.codigo || "",
+        orden: idx + 1,
+      };
+    });
+    grupos.push({
+      ...g,
+      principal,
+      ordenados,
+      variantes,
+    });
+  }
+  return grupos.sort((a, b) => a.base.localeCompare(b.base, "es"));
+}
+
+function abrirUnificadorVariantes() {
+  const grupos = detectarGruposVariantes();
+  $("#modal .sheet").innerHTML = `
+  <div class="stack">
+    <div class="sheet-head">
+      <h2>⚡ Agrupar en Producto Base + Variantes</h2>
+      <button type="button" class="x" data-cerrar aria-label="Cerrar">✕</button>
+    </div>
+    <p class="hint">Detectamos productos publicados por separado con distintas medidas o tallas (ej. Argolla Niquelada 1,5 cm, 2,0 cm, 2,5 cm…). Al unificarlos, el producto base conservará una sola foto principal y todas sus medidas ordenadas de menor a mayor con su precio individual, ocultando las tarjetas repetidas <b>sin borrar ningún registro de la base de datos</b>.</p>
+    ${grupos.length ? `
+      <div class="kpis">
+        ${kpi("Productos base detectados", grupos.length)}
+        ${kpi("Variantes totales a agrupar", grupos.reduce((a, g) => a + g.variantes.length, 0))}
+      </div>
+      <div class="unificar-lista">
+        ${grupos.map(g => `
+          <div class="card unificar-item">
+            <div class="unificar-item-head">
+              <div>
+                <span class="tipo">${esc(CATEGORIAS[g.tipo] || g.tipo)}</span>
+                <h4>${esc(g.base)}</h4>
+              </div>
+              <span class="pill ok">${g.variantes.length} medidas</span>
+            </div>
+            <div class="adm-vars-pills">
+              ${g.variantes.map(v => `<span class="adm-var-chip ${v.disponible ? "ok" : "off"}">${esc(v.nombre)} · <b>${usd(v.precio)}</b></span>`).join("")}
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="acciones-sheet">
+        <button type="button" class="btn ghost" data-cerrar>Cancelar</button>
+        <button type="button" class="btn" data-action="confirmar-unificar">✔ Unificar ${grupos.length} productos base ahora</button>
+      </div>
+    ` : `
+      <div class="card">
+        <p class="muted">¡Todo está limpio! No se encontraron tarjetas repetidas con distintas medidas pendientes por agrupar. Puedes agregar o editar variantes desde el botón <b>Editar</b> de cualquier producto.</p>
+      </div>
+      <div class="acciones-sheet">
+        <button type="button" class="btn ghost" data-cerrar>Cerrar</button>
+      </div>
+    `}
+  </div>`;
+  abrirModal();
+}
+
+async function confirmarUnificacionVariantes(btn) {
+  const grupos = detectarGruposVariantes();
+  if (!grupos.length) return cerrarModal();
+  if (btn) btn.disabled = true;
+  try {
+    const ahora = new Date().toISOString();
+    for (const g of grupos) {
+      const primeraDisp = g.variantes.find(v => v.disponible) || g.variantes[0];
+      const fotoPrincipal = fotoDe(g.principal);
+      const { error: errBase } = await sb.from("productos").update({
+        nombre: g.base,
+        precio: primeraDisp ? primeraDisp.precio : g.principal.precio,
+        fotos: fotoPrincipal ? [fotoPrincipal] : g.principal.fotos,
+        variantes: g.variantes,
+        activo: true,
+        actualizado_en: ahora,
+      }).eq("id", g.principal.id);
+      if (errBase) throw errBase;
+
+      const secundarios = g.ordenados.map(x => x.p.id).filter(id => id !== g.principal.id);
+      if (secundarios.length) {
+        const { error: errSec } = await sb.from("productos").update({
+          activo: false,
+          actualizado_en: ahora,
+        }).in("id", secundarios);
+        if (errSec) throw errSec;
+      }
+    }
+    cerrarModal();
+    toast(`${grupos.length} producto(s) base unificados con sus variantes ✔`);
+    await cargar();
+  } catch (err) {
+    toast("No se pudo completar la unificación: " + (err.message || "error"));
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ---------- Exportar inventario a Excel ---------- */
@@ -857,7 +1176,7 @@ function exportarInventario() {
     const precio = Number(p.precio) || 0;
     const costo = Number(p.costo) || 0;
     const porVariante = (Array.isArray(p.variantes) ? p.variantes : [])
-      .map(v => `${v.nombre}: ${Number(v.stock) || 0}`).join(" · ");
+      .map(v => `${v.nombre} (${usd(v.precio ?? precio)}): ${varianteDispAdm(v) ? (Number(v.stock) || 1) : "Agotado"}`).join(" · ");
     filas.push([
       celda(p.nombre),
       celda(CATEGORIAS[p.tipo] || ""),
@@ -885,7 +1204,7 @@ function exportarInventario() {
 
   const libro = XLSX.utils.book_new();
   const hoja = XLSX.utils.aoa_to_sheet(filas);
-  hoja["!cols"] = [{ wch: 40 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 36 }, { wch: 20 }, { wch: 20 }];
+  hoja["!cols"] = [{ wch: 40 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 42 }, { wch: 20 }, { wch: 20 }];
   hoja["!autofilter"] = { ref: `A4:I${ultima}` };
   XLSX.utils.book_append_sheet(libro, hoja, "Inventario");
   XLSX.writeFile(libro, `Inventario_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -980,6 +1299,8 @@ async function accion(nombre, el) {
     case "duplicar": return duplicarProducto(id);
     case "categorias": return abrirCategorias();
     case "exportar": return exportarInventario();
+    case "unificar-variantes": return abrirUnificadorVariantes();
+    case "confirmar-unificar": return confirmarUnificacionVariantes(el);
     case "plantillas":
       adm.plantilla = Object.keys(CATEGORIAS)[0] || "maquina";
       dibujarPlantillas();
@@ -992,8 +1313,60 @@ async function accion(nombre, el) {
   switch (nombre) {
     case "agregar-car": f.caracteristicas.push({ campo: "", valor: "" }); return dibujarFormulario();
     case "quitar-car": f.caracteristicas.splice(i, 1); return dibujarFormulario();
-    case "agregar-var": f.variantes.push({ nombre: "", stock: 0 }); return dibujarFormulario();
-    case "quitar-var": f.variantes.splice(i, 1); return dibujarFormulario();
+    case "agregar-var":
+      f.variantes.push({
+        nombre: "",
+        precio: f.precio ?? "",
+        disponible: true,
+        stock: 1,
+      });
+      return dibujarFormulario();
+    case "quitar-var":
+      f.variantes.splice(i, 1);
+      if (!f.variantes.length) f.variantes = variantesPorDefecto(f.precio);
+      return dibujarFormulario();
+    case "subir-var":
+      if (i > 0) {
+        [f.variantes[i - 1], f.variantes[i]] = [f.variantes[i], f.variantes[i - 1]];
+        dibujarFormulario();
+      }
+      return;
+    case "bajar-var":
+      if (i >= 0 && i < f.variantes.length - 1) {
+        [f.variantes[i + 1], f.variantes[i]] = [f.variantes[i], f.variantes[i + 1]];
+        dibujarFormulario();
+      }
+      return;
+    case "ordenar-var":
+      f.variantes = ordenarVariantesLista(f.variantes);
+      toast("Variantes ordenadas de menor a mayor ✔");
+      return dibujarFormulario();
+    case "lote-var": {
+      const inp = $("#varLoteInput");
+      const raw = inp ? String(inp.value || "").trim() : "";
+      if (!raw) return toast("Escribe las medidas o colores separados por coma");
+      const etiquetas = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      if (!etiquetas.length) return;
+      // Si la única fila actual es "Única" o está vacía, la reemplazamos
+      if (f.variantes.length === 1 && (!f.variantes[0].nombre || normaTexto(f.variantes[0].nombre) === "unica")) {
+        f.variantes = [];
+      }
+      const existentes = new Set(f.variantes.map(v => normaTexto(v.nombre)));
+      etiquetas.forEach(et => {
+        if (!existentes.has(normaTexto(et))) {
+          existentes.add(normaTexto(et));
+          f.variantes.push({
+            nombre: et,
+            precio: f.precio ?? "",
+            disponible: true,
+            stock: 1,
+          });
+        }
+      });
+      f.variantes = ordenarVariantesLista(f.variantes);
+      toast(`${etiquetas.length} opción(es) agregadas y ordenadas ✔`);
+      return dibujarFormulario();
+    }
     case "agregar-doc": f.documentos.push({ nombre: "", url: "" }); return dibujarFormulario();
     case "quitar-doc": f.documentos.splice(i, 1); return dibujarFormulario();
     case "quitar-foto": f.fotos.splice(i, 1); return dibujarFormulario();
@@ -1050,9 +1423,32 @@ document.addEventListener("input", (e) => {
   if (!f || !t.closest("#formProd")) return;
 
   if (t.dataset.arr) {
+    const idx = Number(t.dataset.i);
     const lista = { car: f.caracteristicas, doc: f.documentos, var: f.variantes }[t.dataset.arr];
-    const fila = lista && lista[Number(t.dataset.i)];
-    if (fila) fila[t.dataset.k] = t.value;
+    const fila = lista && lista[idx];
+    if (!fila) return;
+    if (t.dataset.arr === "var" && t.dataset.k === "disponible") return;
+    fila[t.dataset.k] = t.value;
+    if (t.dataset.arr === "var" && t.dataset.k === "stock") {
+      const st = parseInt(t.value, 10) || 0;
+      fila.disponible = st > 0;
+      const rowEl = t.closest("[data-var-row]");
+      if (rowEl) {
+        rowEl.classList.toggle("var-agotada", !fila.disponible);
+        const chk = rowEl.querySelector('input[data-k="disponible"]');
+        const sw = rowEl.querySelector(".ios-switch");
+        const txt = rowEl.querySelector(`[data-var-disp-txt="${idx}"]`);
+        if (chk) chk.checked = fila.disponible;
+        if (sw) {
+          sw.classList.toggle("on", fila.disponible);
+          sw.classList.toggle("ok", fila.disponible);
+        }
+        if (txt) {
+          txt.textContent = fila.disponible ? "Disponible" : "Agotado";
+          txt.className = `ios-toggle-txt ${fila.disponible ? "ok" : "agotado"}`;
+        }
+      }
+    }
     return;
   }
 
@@ -1063,10 +1459,15 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.id === "fotoPrincipalIn") {
+    const archivos = [...(t.files || [])];
+    t.value = "";
+    return subirFotos(archivos, true);
+  }
   if (t.id === "fotosIn") {
     const archivos = [...(t.files || [])];
     t.value = "";
-    return subirFotos(archivos);
+    return subirFotos(archivos, false);
   }
   if (t.dataset && t.dataset.fotoRapida) {
     const id = t.dataset.fotoRapida;
@@ -1083,9 +1484,48 @@ document.addEventListener("change", (e) => {
     return dibujarPlantillas();
   }
   const f = adm.form;
-  if (!f || !t.closest("#formProd") || !t.dataset.b) return;
+  if (!f || !t.closest("#formProd")) return;
+
+  if (t.dataset.arr === "var" && t.dataset.k === "disponible") {
+    const idx = Number(t.dataset.i);
+    const fila = f.variantes && f.variantes[idx];
+    if (!fila) return;
+    fila.disponible = !!t.checked;
+    if (fila.disponible && (parseInt(fila.stock, 10) || 0) <= 0) {
+      fila.stock = 1;
+    } else if (!fila.disponible) {
+      fila.stock = 0;
+    }
+    const rowEl = t.closest("[data-var-row]");
+    if (rowEl) {
+      rowEl.classList.toggle("var-agotada", !fila.disponible);
+      const stockIn = rowEl.querySelector('input[data-k="stock"]');
+      const sw = rowEl.querySelector(".ios-switch");
+      const txt = rowEl.querySelector(`[data-var-disp-txt="${idx}"]`);
+      if (stockIn) stockIn.value = fila.stock;
+      if (sw) {
+        sw.classList.toggle("on", fila.disponible);
+        sw.classList.toggle("ok", fila.disponible);
+      }
+      if (txt) {
+        txt.textContent = fila.disponible ? "Disponible" : "Agotado";
+        txt.className = `ios-toggle-txt ${fila.disponible ? "ok" : "agotado"}`;
+      }
+    }
+    return;
+  }
+
+  if (!t.dataset.b) return;
   if (t.dataset.b === "tipo") return cambiarTipo(t.value);
-  if (t.type === "checkbox") f[t.dataset.b] = t.checked;
+  if (t.type === "checkbox") {
+    f[t.dataset.b] = t.checked;
+    const lbl = t.closest(".ios-tog");
+    const sw = lbl && lbl.querySelector(".ios-switch");
+    if (sw) {
+      sw.classList.toggle("on", t.checked);
+      if (t.dataset.b === "activo") sw.classList.toggle("ok", t.checked);
+    }
+  }
 });
 
 document.addEventListener("submit", (e) => {

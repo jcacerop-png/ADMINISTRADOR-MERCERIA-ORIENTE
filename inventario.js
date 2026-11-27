@@ -224,7 +224,7 @@ async function confirmarImportacion() {
       accesorios: [],
       usos: n.usos || [],
       documentos: [],
-      variantes: [{ nombre: "Única", stock: n.stock }],
+      variantes: [{ nombre: "Única", precio: n.precio, disponible: n.stock > 0, stock: n.stock, orden: 1 }],
       actualizado_en: ahora,
     }));
     for (const bloque of enTrozos(filasNuevas, 100)) {
@@ -245,8 +245,8 @@ async function confirmarImportacion() {
         if (c.usos.length) cambio.usos = c.usos;
         if (c.descripcion) cambio.descripcion = c.descripcion;
         const vars = Array.isArray(c.actual.variantes) ? c.actual.variantes : [];
-        if (vars.length === 0) cambio.variantes = [{ nombre: "Única", stock: c.stock }];
-        else if (vars.length === 1) cambio.variantes = [{ ...vars[0], stock: c.stock }];
+        if (vars.length === 0) cambio.variantes = [{ nombre: "Única", precio: c.precio, disponible: c.stock > 0, stock: c.stock, orden: 1 }];
+        else if (vars.length === 1) cambio.variantes = [{ ...vars[0], precio: c.precio, disponible: c.stock > 0, stock: c.stock }];
         return sb.from("productos").update(cambio).eq("id", c.actual.id);
       }));
       const fallo = resultados.find(r => r.error);
